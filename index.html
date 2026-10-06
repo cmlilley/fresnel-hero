@@ -56,8 +56,8 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 8px 16px;
-        margin-bottom: 10px;
+        gap: 10px 16px;
+        margin-bottom: 12px;
       }
       h1 {
         font-family: "Barlow Condensed", "Barlow", sans-serif;
@@ -69,20 +69,14 @@
         white-space: nowrap;
       }
       h1 .dot { color: var(--accent); }
-      .howto {
-        flex: 1 1 260px;
-        margin: 0;
-        font-size: 13.5px;
-        line-height: 1.4;
-        color: var(--ink-soft);
-        max-width: 520px;
-      }
-      .howto strong { color: var(--ink); font-weight: 600; }
       .top-actions {
         display: flex;
         align-items: center;
         gap: 10px;
         flex-wrap: wrap;
+        /* Group the controls at the right end of the title row,
+           opposite the title, on the same vertical axis. */
+        margin-left: auto;
       }
       /* Compact color-mixing key on its own slim line in the header:
          dots with + and =, one short row, wraps on narrow screens. */
@@ -91,7 +85,8 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 3px 14px;
+        justify-content: center;
+        gap: 4px 16px;
         font-size: 12px;
         color: var(--ink-soft);
       }
@@ -322,14 +317,6 @@
       .scene-dot[data-ch="R"] { color: #ff3524; }
       .scene-dot[data-ch="G"] { color: #25e04f; }
       .scene-dot[data-ch="B"] { color: #3d7bff; }
-      .stage-hint {
-        position: absolute;
-        left: 22px; bottom: 18px;
-        font-size: 12.5px;
-        color: rgba(240, 237, 230, 0.55);
-        pointer-events: none;
-        letter-spacing: 0.02em;
-      }
       /* Shown only while the show runs: a small corner control, not
          an end screen — the win state itself is the light show. */
       .next-round {
@@ -349,18 +336,9 @@
       canvas#stage.locked { cursor: default; }
       .scene-dot:disabled { opacity: 0.45; cursor: default; }
 
-      footer.foot {
-        margin-top: 18px;
-        font-size: 13px;
-        color: var(--ink-soft);
-        line-height: 1.55;
-      }
-      footer.foot b { color: var(--ink); }
-
       @media (max-width: 760px) {
         .goals { grid-template-columns: 1fr; }
         h1 { font-size: 20px; }
-        .stage-hint { display: none; }
         .scene-dot { width: 15px; height: 15px; }
         .scene-light-ctl { gap: 3px; padding: 4px 6px; }
         .scene-light-ctl .sc-label { display: none; }
@@ -392,13 +370,6 @@
     <div class="wrap">
       <header class="topbar">
         <h1>Fresnel <span class="dot">Hero</span></h1>
-        <p class="howto">
-          All controls are on the stage: <strong>drag a fixture's centre circle</strong> to aim,
-          <strong>drag its barn-door knobs</strong> to shape the beam, tap the <strong>color dots</strong>
-          to relight it, and use the <strong>+ / − circles on the truss</strong> to add or remove lights.
-          Light each performer so the <strong>goal % of their silhouette</strong> matches each target color —
-          overlapping beams mix additively.
-        </p>
         <div class="top-actions">
           <div class="seg" role="group" aria-label="Difficulty">
             <button id="modeEasy" aria-pressed="true">Easy</button>
@@ -422,13 +393,8 @@
       <div class="stage-frame">
         <canvas id="stage" width="960" height="600" aria-label="Stage with lights on a truss and three performers"></canvas>
         <div class="scene-ui" id="sceneUi" aria-label="On-stage light color controls"></div>
-        <div class="stage-hint">Drag the centre circle on a fixture to aim &middot; drag the barn-door flap knobs to shape the beam &middot; + adds a light, − removes one</div>
         <button class="btn next-round" id="nextRound">Play next round</button>
       </div>
-
-      <footer class="foot">
-        Tip: barn doors stop at the center of the beam, so closing both narrows a lamp to a sliver but never kills it outright — handy for keeping a color off a performer who doesn't need it.
-      </footer>
     </div>
 
     <script>
@@ -454,7 +420,9 @@
       // doorHalfAngle.
       var BASE_HALF = 32 * Math.PI / 180;
       var CHAR_W = 150, CHAR_H = 196;
-      var CHAR_Y = FLOOR_Y - CHAR_H + 14;   // silhouette top (feet sink 14px into floor line)
+      // Performers are no longer placed by a shared top edge:
+      // each is grounded individually on FLOOR_Y — see the
+      // grounding helpers where the silhouettes are built.
 
       var CH_RGB = {
         R: [255, 53, 36],
@@ -522,7 +490,56 @@
         return p;
       }
 
+      // The style board draws limbs and stands as round-capped
+      // strokes; the game fills paths, so a stroke is rebuilt
+      // from filled pieces: a pLine bar plus a circle at each
+      // end (and, for curves, at each sampled point along the
+      // cubic). The PROPOSED builders below return a LIST of
+      // such pieces and the review strip fills them one by
+      // one — filled separately, the pieces always union
+      // solidly. (Filled as one combined path they would not:
+      // pieces whose path data winds the opposite way cancel
+      // each other where they overlap, punching holes at the
+      // joints — that is why the parts stay separate here.)
+      function segParts(x1, y1, x2, y2, w) {
+        return [pLine(x1, y1, x2, y2, w), pCirc(x1, y1, w / 2), pCirc(x2, y2, w / 2)];
+      }
+      function cubicParts(x0, y0, x1, y1, x2, y2, x3, y3, w) {
+        var parts = [pCirc(x0, y0, w / 2)], N = 14, px = x0, py = y0;
+        for (var i = 1; i <= N; i++) {
+          var t = i / N, u = 1 - t;
+          var x = u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3;
+          var y = u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3;
+          parts.push(pLine(px, py, x, y, w));
+          parts.push(pCirc(x, y, w / 2));
+          px = x; py = y;
+        }
+        return parts;
+      }
+      function flatParts(list) {
+        var out = [];
+        list.forEach(function (q) {
+          if (Array.isArray(q)) out = out.concat(q); else out.push(q);
+        });
+        return out;
+      }
+      // Fill a performer shape whether it is a single Path2D
+      // (guitarist / drummer) or a list of pieces (the singer,
+      // whose board-ported parts must be filled one by one so
+      // they union solidly — see segParts above). Every place
+      // that paints, masks, or clips a silhouette goes through
+      // this so all three performers work the same way.
+      function fillPathParts(c, partsOrPath) {
+        if (Array.isArray(partsOrPath)) {
+          partsOrPath.forEach(function (p) { c.fill(p); });
+        } else if (partsOrPath) {
+          c.fill(partsOrPath);
+        }
+      }
+
       function buildSinger() {
+        // Kept close to the version that already worked: leaning
+        // into a mic on a stand, one arm up to the mic, one down.
         return combine([
           // mic stand + mic
           pLine(112, 66, 122, 188, 5),
@@ -545,7 +562,50 @@
         ]);
       }
 
+      function buildSingerProposed() {
+        // LIVE singer (approved 2026-10-06 — “singer is good,
+        // use as is and add to scene”): the Detailed Stage
+        // singer from the style options board, ported
+        // shape-for-shape. The filled paths below are the
+        // board figure's own path data, and its strokes
+        // (legs, arms, mic stand, cable) are rebuilt at the
+        // board's own weights — nothing redrawn or re-proportioned.
+        // Long hair falls past her shoulders in the same shape
+        // as her head, the slim torso leaves daylight between
+        // the down arm and the body, and the mic sits on a
+        // tripod stand with its cable curling to the floor.
+        // This is now the singer used in gameplay, scoring,
+        // and the solver (via chars[0] below).
+        return flatParts([
+          // boots / lower legs
+          new Path2D("M96 178 L104 178 L99 152 L93 152 Z"),
+          new Path2D("M50 178 L58 178 L57 152 L49 152 Z"),
+          // legs
+          segParts(66, 118, 56, 156, 7),
+          segParts(84, 118, 96, 156, 7),
+          // torso
+          new Path2D("M60 50 C58 44 90 44 91 51 L89 84 L99 116 C100 122 94 126 87 124 L64 124 C57 126 51 122 53 115 L62 84 Z"),
+          // arm up to the mic, arm down at her side
+          cubicParts(89, 56, 97, 58, 103, 58, 108, 55, 7.5),
+          cubicParts(61, 57, 53, 66, 48, 76, 46, 86, 7.5),
+          pCirc(45, 90, 4),
+          // head + long hair, one shape
+          new Path2D("M75 8 C88 8 95 19 93 33 L95 74 C95 79 90 81 87 77 L85 48 C81 52 69 52 65 48 L63 78 C60 81 55 78 56 71 L58 34 C57 19 63 8 75 8 Z"),
+          // mic stand: pole, tripod feet, cable curling down
+          segParts(112, 62, 121, 176, 2.5),
+          segParts(121, 176, 106, 186, 2.5),
+          segParts(121, 176, 136, 186, 2.5),
+          cubicParts(108, 55, 100, 90, 102, 130, 110, 168, 2.5),
+          // the mic itself, angled at her mouth
+          pEll(109, 52, 6, 9, -0.5236)
+        ]);
+      }
+
       function buildGuitarist() {
+        // PREVIOUS in-game guitarist — replaced in the live
+        // scene by G1 (buildGuitaristProposed below) once G1
+        // was approved. Kept only as the old shape's record;
+        // not used in gameplay, scoring, or the solver.
         return combine([
           // legs (wide stance) + shoes
           pPoly([48, 116, 64, 116, 52, 192, 36, 192]),
@@ -569,7 +629,70 @@
         ]);
       }
 
+      function buildGuitaristProposed() {
+        // LIVE guitarist (approved 2026-10-06 — “g1 is good”):
+        // guitarist G1 from the style options board, ported
+        // shape-for-shape — the board figure's own geometry,
+        // nothing redrawn. G1's guitar lives in ONE rotated
+        // frame: on the board it is drawn in a group translated
+        // to the sound-hole centre (86, 110) and rotated -38°,
+        // with the body shaped symmetrically around that
+        // frame's axis, the neck a stroke lying exactly on the
+        // axis, and the headstock paddle centred on it. That
+        // same translate + rotate is applied here (via
+        // DOMMatrix) to the board's own path data, so body,
+        // neck and headstock share the single axis by
+        // construction — no kink or offset at the joint. The
+        // sound hole is a true hole in the body: the board
+        // fills it with evenodd while canvas fills nonzero, so
+        // the hole subpath is included with its arc sweep flags
+        // flipped — the same circle wound opposite the body
+        // outline — which keeps the hole open under nonzero
+        // fill. Everything outside the guitar group uses the
+        // board's coordinates directly: its strokes become
+        // filled pieces at the board's own weights (see
+        // segParts / cubicParts) and its fills are the board's
+        // path data verbatim. This is now the guitarist used
+        // in gameplay, scoring, and the solver (via chars[1]).
+        var mtx = new DOMMatrix().translate(86, 110).rotate(-38);
+        function xform(p) {
+          var q = new Path2D();
+          q.addPath(p, mtx);
+          return q;
+        }
+        var guitarBody = new Path2D(
+          "M24 -6 C20 -13 16 -15 10 -15 C4 -15 0 -12 -4 -11.5 C-10 -11 -14 -19 -20 -19.5 C-27 -20 -30 -10 -30 0 C-30 10 -27 20 -20 19.5 C-14 19 -10 11 -4 11.5 C0 12 4 15 10 15 C16 15 20 13 24 6 Z" +
+          " M2 -6.5 a6.5 6.5 0 1 1 0 13 a6.5 6.5 0 1 1 0 -13 Z"
+        );
+        return flatParts([
+          // legs (classic stance) + shoes
+          segParts(64, 124, 54, 170, 8),
+          segParts(86, 124, 100, 170, 8),
+          new Path2D("M46 174 L62 174 L60 166 L48 166 Z"),
+          new Path2D("M94 174 L110 174 L108 166 L96 166 Z"),
+          // torso
+          new Path2D("M54 50 C54 43 86 41 88 49 L90 108 C91 116 85 121 78 119 L60 121 C53 121 50 115 51 107 Z"),
+          // the guitar, in its single rotated frame: the body
+          // (sound hole cut through it), the neck stroke lying
+          // on the axis, the headstock paddle centred on it
+          xform(guitarBody),
+          segParts(16, 0, 58, 0, 7).map(xform),
+          xform(pPoly([58, -4.5, 71, -3.2, 71, 3.2, 58, 4.5])),
+          // arms: fretting hand out to grip the neck on the
+          // axis, strumming hand over the sound hole
+          cubicParts(85, 55, 100, 62, 114, 71, 124, 80, 8),
+          cubicParts(57, 54, 66, 78, 78, 95, 92, 104, 8),
+          // head + hair cap — no hat, nothing floating by it
+          pCirc(66, 27, 12),
+          new Path2D("M52 28 C51 14 60 6 68 7 C77 8 82 15 81 25 C78 18 72 14 66 15 C59 16 54 20 52 28 Z")
+        ]);
+      }
+
       function buildDrummer() {
+        // PREVIOUS in-game drummer — replaced in the live
+        // scene by revised R2 (buildDrummerProposed below)
+        // once R2 was approved. Kept only as the old shape's
+        // record; not used in gameplay, scoring, or the solver.
         return combine([
           // cymbals + stands
           pEll(24, 62, 24, 6, -0.12),
@@ -598,14 +721,83 @@
         ]);
       }
 
+      function buildDrummerProposed() {
+        // LIVE drummer (approved 2026-10-06 — “Approve revised
+        // R2 — drummer final, add to game”): drummer R2 from
+        // the style options board, in its revised form with
+        // the hi-hat moved forward, clear of the torso —
+        // ported shape-for-shape, the board figure's own
+        // geometry, nothing redrawn. He sits in SIDE PROFILE
+        // facing left: crash cymbal far left on its stand,
+        // snare and one rack tom over a pinstripe bass drum,
+        // the hi-hat standing forward of the snare in open
+        // space (its discs end ~14 units short of the torso,
+        // with daylight all around them), throne, kick pedal,
+        // one stick up to the crash and the snare stick caught
+        // raised mid-stroke — lengthened slightly, as on the
+        // board, to cover the reach to the moved hi-hat. The
+        // board's strokes become filled pieces at the board's
+        // own weights (see segParts / cubicParts) and its
+        // fills are the board's path data verbatim; ellipse
+        // rotations are the board's degrees in radians. The
+        // pinstripe bass drum is four concentric circles the
+        // board fills with evenodd; canvas fills nonzero, so
+        // the 2nd and 4th circles carry flipped arc sweep
+        // flags — wound opposite their neighbours — which
+        // leaves the same two rings filled and the centre
+        // hole and pinstripe gap open under nonzero fill
+        // (the same trick as G1's sound hole). This is now
+        // the drummer used in gameplay, scoring, and the
+        // solver (via chars[2] below).
+        return flatParts([
+          // crash cymbal, far left, + its stand
+          pEll(26, 47, 15, 3.2, -0.1396),
+          segParts(26, 51, 24, 128, 2.5),
+          // rack tom over the bass drum
+          pEll(63, 90, 12, 5.5, -0.0698),
+          // bass drum in profile, pinstripe rings + centre hole
+          new Path2D("M46 88 a26 26 0 1 0 0 52 a26 26 0 1 0 0 -52 Z M46 91 a23 23 0 1 1 0 46 a23 23 0 1 1 0 -46 Z M46 92.5 a21.5 21.5 0 1 0 0 43 a21.5 21.5 0 1 0 0 -43 Z M46 98 a16 16 0 1 1 0 32 a16 16 0 1 1 0 -32 Z"),
+          // snare + its stand
+          pEll(36, 79, 11, 6, -0.1745),
+          segParts(36, 85, 38, 98, 2.2),
+          // hi-hat, moved forward clear of the body: two thin
+          // discs on a slim stand, in front of the snare
+          pEll(67, 73, 9.5, 1.8, 0),
+          pEll(67, 76.5, 9.5, 1.8, 0),
+          segParts(67, 78, 67, 128, 2.2),
+          // throne: seat + stem
+          segParts(100, 93, 118, 93, 4),
+          segParts(109, 93, 109, 128, 4),
+          // leg down to the kick pedal + shoe
+          segParts(102, 88, 80, 94, 8),
+          segParts(80, 94, 76, 128, 8),
+          new Path2D("M68 132 L82 132 L81 126 L70 126 Z"),
+          // kick pedal at his foot
+          pPoly([56, 141, 67, 141, 65, 135, 58, 135]),
+          // torso, in profile
+          new Path2D("M96 43 C106 40 114 46 113 56 L110 85 C109 92 102 94 97 90 C92 87 91 80 92 69 L94 51 Z"),
+          // arm out to the crash cymbal + its stick
+          cubicParts(102, 50, 88, 44, 70, 45, 54, 50, 6.5),
+          segParts(54, 50, 43, 54, 2.5),
+          // snare arm bent up, stick caught raised mid-stroke
+          // (lengthened slightly for the hi-hat's new reach)
+          cubicParts(100, 54, 94, 61, 89, 65, 81, 65, 7.5),
+          segParts(81, 65, 70, 53, 2.5),
+          // head in profile: round head, nose, hair cap
+          pCirc(103, 31, 11),
+          pPoly([94, 31, 86, 35, 95, 38]),
+          new Path2D("M92 30 C91 18 98 11 105 12 C113 13 117 20 116 29 C113 22 107 19 102 20 C97 21 93 24 92 30 Z")
+        ]);
+      }
+
       /* ================= state ================= */
       // Each performer carries a list of targets: { bits, goal, now }.
       // Easy deals exactly one, Medium exactly two, Hard exactly
       // three, and every sub-target has to be met to win.
       var chars = [
-        { name: "Singer",    x: 118, build: buildSinger,    targets: [{ bits: 1, goal: 65, now: 0 }], samples: [], path: null },
-        { name: "Guitarist", x: 405, build: buildGuitarist, targets: [{ bits: 2, goal: 65, now: 0 }], samples: [], path: null },
-        { name: "Drummer",   x: 692, build: buildDrummer,   targets: [{ bits: 4, goal: 65, now: 0 }], samples: [], path: null }
+        { name: "Singer",    x: 118, scale: 1, build: buildSingerProposed, targets: [{ bits: 1, goal: 65, now: 0 }], samples: [], path: null },
+        { name: "Guitarist", x: 405, scale: 1, build: buildGuitaristProposed, targets: [{ bits: 2, goal: 65, now: 0 }], samples: [], path: null },
+        { name: "Drummer",   x: 692, scale: 1.23, build: buildDrummerProposed, targets: [{ bits: 4, goal: 65, now: 0 }], samples: [], path: null }
       ];
       function makeLight(slot, color, tilt) {
         return {
@@ -641,13 +833,54 @@
       maskCanvas.width = CHAR_W; maskCanvas.height = CHAR_H;
       var mctx = maskCanvas.getContext("2d");
 
+      // Grounding: each silhouette's own lowest filled pixel is
+      // measured from its mask (groundY, in local coords), and the
+      // figure is placed so that exact point sits on FLOOR_Y —
+      // feet / mic-stand base / bass-drum bottom + throne on the
+      // stage floor, nobody floating. The drummer also gets a
+      // scale-up (ch.scale, 1.23), anchored at that same
+      // floor point and at the figure's horizontal centre, so
+      // growing it never lifts it off the ground. Rendering,
+      // scoring, and the solver all place samples through
+      // charStagePoint / applyCharTransform, so they always
+      // agree with what is drawn.
+      function charStagePoint(ch, lx, ly) {
+        return [
+          ch.x + CHAR_W / 2 + (lx - CHAR_W / 2) * ch.scale,
+          FLOOR_Y + (ly - ch.groundY) * ch.scale
+        ];
+      }
+      function applyCharTransform(c, ch) {
+        c.translate(ch.x + CHAR_W / 2, FLOOR_Y);
+        c.scale(ch.scale, ch.scale);
+        c.translate(-CHAR_W / 2, -ch.groundY);
+      }
+      function charMidY(ch) {
+        return FLOOR_Y - (ch.groundY - ch.topY) * ch.scale / 2;
+      }
+
       // Build each silhouette path once; precompute sample points for scoring.
+      // fillPathParts handles both single-Path2D shapes and the
+      // singer's list of pieces, so scoring/solver sample the
+      // exact live silhouettes.
       chars.forEach(function (ch) {
         ch.path = ch.build();
         mctx.clearRect(0, 0, CHAR_W, CHAR_H);
         mctx.fillStyle = "#fff";
-        mctx.fill(ch.path);
+        fillPathParts(mctx, ch.path);
         var data = mctx.getImageData(0, 0, CHAR_W, CHAR_H).data;
+        var maxY = 0, minY = CHAR_H - 1;
+        for (var by = 0; by < CHAR_H; by++) {
+          for (var bx = 0; bx < CHAR_W; bx++) {
+            if (data[(by * CHAR_W + bx) * 4 + 3] > 120) {
+              if (by > maxY) maxY = by;
+              if (by < minY) minY = by;
+            }
+          }
+        }
+        // Bottom edge of the lowest filled pixel row.
+        ch.groundY = maxY + 1;
+        ch.topY = minY;
         var pts = [];
         for (var y = 0; y < CHAR_H; y += 3) {
           for (var x = 0; x < CHAR_W; x += 3) {
@@ -662,8 +895,9 @@
       var flatX = [], flatY = [], flatC = [];
       chars.forEach(function (ch, ci) {
         ch.samples.forEach(function (p) {
-          flatX.push(ch.x + p[0]);
-          flatY.push(CHAR_Y + p[1]);
+          var sp = charStagePoint(ch, p[0], p[1]);
+          flatX.push(sp[0]);
+          flatY.push(sp[1]);
           flatC.push(ci);
         });
       });
@@ -1110,22 +1344,29 @@
         lights.forEach(function (L) { drawBeamShape(lctx, L, 0.88, 0.55); });
         lctx.restore();
 
-        // ---- characters: black base, then the additive light clipped
+        // ---- characters: black base, then the additive light masked
         //      to the silhouette so each lit region takes the mixed color ----
+        // The mask is painted piece by piece (fillPathParts) and the
+        // light is kept with source-in, instead of clipping with a
+        // single combined path: the singer is a list of pieces, and
+        // a combined clip would punch holes where pieces overlap.
         chars.forEach(function (ch) {
           ctx.save();
-          ctx.translate(ch.x, CHAR_Y);
+          applyCharTransform(ctx, ch);
           ctx.fillStyle = "#000";
-          ctx.fill(ch.path);
+          fillPathParts(ctx, ch.path);
           ctx.restore();
 
           tctx.clearRect(0, 0, W, H);
           tctx.save();
-          tctx.translate(ch.x, CHAR_Y);
-          tctx.clip(ch.path);
+          applyCharTransform(tctx, ch);
+          tctx.fillStyle = "#fff";
+          fillPathParts(tctx, ch.path);
+          tctx.globalCompositeOperation = "source-in";
           tctx.setTransform(1, 0, 0, 1, 0, 0);
           tctx.drawImage(lightCanvas, 0, 0);
           tctx.restore();
+          tctx.globalCompositeOperation = "source-over";
           ctx.drawImage(tintCanvas, 0, 0);
 
           // name plate
@@ -1153,8 +1394,9 @@
           // count (targets are disjoint — a pixel is exactly one mix).
           var counts = {};
           for (var i = 0; i < ch.samples.length; i++) {
-            var px = ch.x + ch.samples[i][0];
-            var py = CHAR_Y + ch.samples[i][1];
+            var sp = charStagePoint(ch, ch.samples[i][0], ch.samples[i][1]);
+            var px = sp[0];
+            var py = sp[1];
             var bits = 0;
             for (var j = 0; j < lights.length; j++) {
               if (pointInBeam(lights[j], px, py)) bits |= CH_BIT[lights[j].color];
@@ -1494,8 +1736,7 @@
           return row.map(function (n) { return n / total * 100; });
         });
       }
-      function aimTiltAt(slotX, tx) {
-        var midY = CHAR_Y + CHAR_H / 2;
+      function aimTiltAt(slotX, tx, midY) {
         return Math.atan2(tx - slotX, midY - APEX_Y) * 180 / Math.PI;
       }
       // A plausible winning rig: every hang point occupied, channel
@@ -1575,7 +1816,7 @@
           } else {
             tx += Math.random() * 70 - 35;
           }
-          var tilt = aimTiltAt(sx, tx) + (Math.random() * 10 - 5);
+          var tilt = aimTiltAt(sx, tx, charMidY(chars[ci])) + (Math.random() * 10 - 5);
           tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, tilt));
           return {
             slot: s, x: sx, color: channels[s], tilt: tilt,
