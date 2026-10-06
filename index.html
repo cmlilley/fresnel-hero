@@ -1,0 +1,1900 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Fresnel Hero</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ece7dd;
+        --panel: #f7f4ec;
+        --panel-edge: #d8d0bf;
+        --ink: #1c1a16;
+        --ink-soft: #5c564a;
+        --accent: #b97e10;
+        --accent-ink: #7c5203;
+        --good: #1d8a4c;
+        --track: #ddd5c3;
+        --stage-frame: #101014;
+        --shadow: 0 10px 30px rgba(28, 24, 12, 0.16);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #131316;
+          --panel: #1d1e23;
+          --panel-edge: #34363f;
+          --ink: #f0ede6;
+          --ink-soft: #a9a499;
+          --accent: #ffb340;
+          --accent-ink: #ffcf7d;
+          --good: #3ecf7f;
+          --track: #33343c;
+          --stage-frame: #0a0a0d;
+          --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Barlow", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 1060px;
+        margin: 0 auto;
+        padding: 12px 16px 36px;
+      }
+      header.topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 16px;
+        margin-bottom: 10px;
+      }
+      h1 {
+        font-family: "Barlow Condensed", "Barlow", sans-serif;
+        font-size: 23px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0;
+        white-space: nowrap;
+      }
+      h1 .dot { color: var(--accent); }
+      .howto {
+        flex: 1 1 260px;
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.4;
+        color: var(--ink-soft);
+        max-width: 520px;
+      }
+      .howto strong { color: var(--ink); font-weight: 600; }
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .seg {
+        display: inline-flex;
+        background: var(--panel);
+        border: 1px solid var(--panel-edge);
+        border-radius: 999px;
+        padding: 3px;
+      }
+      .seg button {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: var(--ink-soft);
+        font: 600 13.5px "Barlow", sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 7px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--ink);
+        color: var(--bg);
+      }
+      .btn {
+        appearance: none;
+        border: 1px solid var(--panel-edge);
+        background: var(--panel);
+        color: var(--ink);
+        font: 600 14px "Barlow", sans-serif;
+        padding: 9px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .btn:hover { border-color: var(--accent); color: var(--accent-ink); }
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #1c1503;
+      }
+      .btn.primary:hover { color: #000; filter: brightness(1.06); }
+
+      /* ---------- goal cards ---------- */
+      .goals {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .goal-card {
+        background: var(--panel);
+        border: 1px solid var(--panel-edge);
+        border-radius: 14px;
+        padding: 12px 14px 13px;
+        box-shadow: var(--shadow);
+      }
+      .goal-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 8px;
+      }
+      .swatch {
+        width: 22px; height: 22px;
+        border-radius: 7px;
+        flex: none;
+        border: 1px solid rgba(0,0,0,0.35);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+      }
+      .goal-name {
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+      .goal-target {
+        margin-left: auto;
+        text-align: right;
+        font-size: 13px;
+        color: var(--ink-soft);
+        line-height: 1.25;
+      }
+      .goal-target b { color: var(--ink); font-size: 14px; }
+      .bar {
+        height: 10px;
+        border-radius: 999px;
+        background: var(--track);
+        position: relative;
+        overflow: visible;
+      }
+      .bar .fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: var(--ink-soft);
+        transition: width 0.18s ease;
+      }
+      .bar .goal-tick {
+        position: absolute;
+        top: -3px; bottom: -3px;
+        width: 2px;
+        background: var(--ink);
+        opacity: 0.65;
+        border-radius: 2px;
+      }
+      .goal-nums {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 7px;
+        font-size: 13px;
+        color: var(--ink-soft);
+        font-variant-numeric: tabular-nums;
+      }
+      .goal-nums .now { font-weight: 700; color: var(--ink); font-size: 15px; }
+      .goal-card.met { border-color: var(--good); }
+      .goal-card.met .goal-nums .now { color: var(--good); }
+      .goal-card.met .bar .fill { background: var(--good); }
+      /* multi-target rows (hard mode deals several colors per performer) */
+      .goal-rows { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; }
+      .trow-head {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+      }
+      .trow .swatch { width: 16px; height: 16px; border-radius: 5px; }
+      .trow-name { font-size: 13.5px; font-weight: 600; }
+      .trow-nums {
+        margin-left: auto; font-size: 12.5px; color: var(--ink-soft);
+        font-variant-numeric: tabular-nums;
+      }
+      .trow-nums .now { font-weight: 700; color: var(--ink); font-size: 13.5px; }
+      .trow .bar { height: 8px; }
+      .trow.met .trow-nums .now { color: var(--good); }
+      .trow.met .bar .fill { background: var(--good); }
+      .goal-card .met-badge { margin-left: auto; }
+      .goal-card.met .goal-head .goal-name { color: var(--good); }
+      .met-badge {
+        display: none;
+        font: 700 11px "Barlow", sans-serif;
+        letter-spacing: 0.08em;
+        color: var(--good);
+        text-transform: uppercase;
+      }
+      .goal-card.met .met-badge { display: inline; }
+
+      /* ---------- stage ---------- */
+      .stage-frame {
+        background: var(--stage-frame);
+        border-radius: 16px;
+        padding: 10px;
+        box-shadow: var(--shadow);
+        position: relative;
+      }
+      canvas#stage {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        touch-action: none;
+        cursor: grab;
+      }
+      canvas#stage.dragging { cursor: grabbing; }
+      /* ---------- in-scene light controls ---------- */
+      .scene-ui {
+        position: absolute;
+        /* Pills ride a little higher than before so the truss band
+           below them stays clear for the remove glyphs that now sit
+           on the truss itself, above each fixture. */
+        inset: -6px 10px auto 10px;
+        height: 0;
+        pointer-events: none;
+        z-index: 3;
+      }
+      .scene-light-ctl {
+        position: absolute;
+        top: 0;
+        transform: translateX(-50%);
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(9, 9, 13, 0.78);
+        border: 1px solid rgba(240, 237, 230, 0.22);
+        border-radius: 999px;
+        padding: 5px 7px;
+        backdrop-filter: blur(3px);
+      }
+      .scene-light-ctl .sc-label {
+        font: 700 10px "Barlow", sans-serif;
+        letter-spacing: 0.09em;
+        color: rgba(240, 237, 230, 0.6);
+        margin-right: 1px;
+      }
+      .scene-light-ctl.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent), 0 4px 14px rgba(0, 0, 0, 0.45);
+      }
+      .scene-dot {
+        appearance: none;
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        padding: 0;
+        cursor: pointer;
+        flex: none;
+      }
+      .scene-dot[data-ch="R"] { background: #ff3524; }
+      .scene-dot[data-ch="G"] { background: #25e04f; }
+      .scene-dot[data-ch="B"] { background: #3d7bff; }
+      .scene-dot[aria-pressed="true"] {
+        border-color: #fff;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 10px 1px currentColor;
+        transform: scale(1.12);
+      }
+      .scene-dot[data-ch="R"] { color: #ff3524; }
+      .scene-dot[data-ch="G"] { color: #25e04f; }
+      .scene-dot[data-ch="B"] { color: #3d7bff; }
+      .stage-hint {
+        position: absolute;
+        left: 22px; bottom: 18px;
+        font-size: 12.5px;
+        color: rgba(240, 237, 230, 0.55);
+        pointer-events: none;
+        letter-spacing: 0.02em;
+      }
+      /* Shown only while the show runs: a small corner control, not
+         an end screen — the win state itself is the light show. */
+      .next-round {
+        position: absolute;
+        right: 18px; bottom: 18px;
+        z-index: 4;
+        display: none;
+        background: rgba(9, 9, 13, 0.72);
+        border: 1px solid rgba(240, 237, 230, 0.28);
+        color: #f0ede6;
+        font-size: 13px;
+        padding: 7px 14px;
+        backdrop-filter: blur(3px);
+      }
+      .next-round.show { display: inline-block; }
+      .next-round:hover { border-color: var(--accent); color: #ffd98a; }
+      canvas#stage.locked { cursor: default; }
+      .scene-dot:disabled { opacity: 0.45; cursor: default; }
+
+      footer.foot {
+        margin-top: 18px;
+        font-size: 13px;
+        color: var(--ink-soft);
+        line-height: 1.55;
+      }
+      footer.foot b { color: var(--ink); }
+      .mix-key { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; white-space: nowrap; }
+      .mix-key .swatch { width: 13px; height: 13px; border-radius: 4px; }
+
+      @media (max-width: 760px) {
+        .goals { grid-template-columns: 1fr; }
+        h1 { font-size: 20px; }
+        .stage-hint { display: none; }
+        .scene-dot { width: 15px; height: 15px; }
+        .scene-light-ctl { gap: 3px; padding: 4px 6px; }
+        .scene-light-ctl .sc-label { display: none; }
+        /* With seven hang points the far-end slots sit ~40px from
+           their neighbours at phone width — narrower than a pill —
+           so slot-centred pills overlap and bury each other's dots.
+           Reflow the pills into an evenly spaced row instead (they
+           stay in L1..Ln truss order); a full seven-light rig wraps
+           to a second row rather than covering controls. */
+        .scene-ui {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 4px 6px;
+          height: auto;
+        }
+        .scene-light-ctl {
+          position: relative;
+          left: auto !important;
+          transform: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bar .fill { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="topbar">
+        <h1>Fresnel <span class="dot">Hero</span></h1>
+        <p class="howto">
+          All controls are on the stage: <strong>drag a fixture's centre circle</strong> to aim,
+          <strong>drag its barn-door knobs</strong> to shape the beam, tap the <strong>color dots</strong>
+          to relight it, and use the <strong>+ / − circles on the truss</strong> to add or remove lights.
+          Light each performer so the <strong>goal % of their silhouette</strong> matches each target color —
+          overlapping beams mix additively.
+        </p>
+        <div class="top-actions">
+          <div class="seg" role="group" aria-label="Difficulty">
+            <button id="modeEasy" aria-pressed="true">Easy</button>
+            <button id="modeHard" aria-pressed="false">Hard</button>
+          </div>
+          <button class="btn" id="newRound">New round</button>
+        </div>
+      </header>
+
+      <section class="goals" id="goals" aria-label="Color goals"></section>
+
+      <div class="stage-frame">
+        <canvas id="stage" width="960" height="600" aria-label="Stage with lights on a truss and three performers"></canvas>
+        <div class="scene-ui" id="sceneUi" aria-label="On-stage light color controls"></div>
+        <div class="stage-hint">Drag the centre circle on a fixture to aim &middot; drag the barn-door flap knobs to shape the beam &middot; + adds a light, − removes one</div>
+        <button class="btn next-round" id="nextRound">Play next round</button>
+      </div>
+
+      <footer class="foot">
+        <b>Color mixing key:</b>
+        <span class="mix-key"><span class="swatch" style="background:#ff3524"></span>Red</span>
+        <span class="mix-key"><span class="swatch" style="background:#25e04f"></span>Green</span>
+        <span class="mix-key"><span class="swatch" style="background:#3d7bff"></span>Blue</span>
+        <span class="mix-key"><span class="swatch" style="background:#ffd21f"></span>Red+Green = Yellow</span>
+        <span class="mix-key"><span class="swatch" style="background:#ff35d1"></span>Red+Blue = Magenta</span>
+        <span class="mix-key"><span class="swatch" style="background:#22d8e6"></span>Green+Blue = Cyan</span>
+        <span class="mix-key"><span class="swatch" style="background:#f4f4f4"></span>All three = White</span>
+        <span class="mix-key"><span class="swatch" style="background:#151515"></span>No light at all = Shadow</span>
+        <br />Tip: barn doors stop at the center of the beam, so closing both narrows a lamp to a sliver but never kills it outright — handy for keeping a color off a performer who doesn't need it.
+      </footer>
+    </div>
+
+    <script>
+      "use strict";
+
+      /* ================= constants ================= */
+      var W = 960, H = 600;
+      var FLOOR_Y = 516;
+      var TRUSS_Y = 34;
+      var APEX_Y = 78;              // beam origin (lens) y
+      // Longer than the stage diagonal (sqrt(960^2 + 600^2) ~= 1133), the
+      // farthest any lens can be from a point of the scene — so at any
+      // tilt (+/-68 deg) and any barn-door setting, every cone runs past
+      // the scene and is clipped by its edge instead of ending mid-scene.
+      // beamQuad and pointInBeam (scoring) both derive from this length.
+      var BEAM_LEN = 1250;
+      var MAX_TILT = 68;            // degrees either way — fixtures can swing wide
+      // Beam half-angle with the doors fully open. This is also the barn
+      // doors' open flare angle (see flapAngle): beam and doors share one
+      // max angle, so a fully open beam's edges flare at the same angle
+      // as the doors. Once a door starts closing, the edge stops
+      // following the door angle and is set by occlusion instead — see
+      // doorHalfAngle.
+      var BASE_HALF = 32 * Math.PI / 180;
+      var CHAR_W = 150, CHAR_H = 196;
+      var CHAR_Y = FLOOR_Y - CHAR_H + 14;   // silhouette top (feet sink 14px into floor line)
+
+      var CH_RGB = {
+        R: [255, 53, 36],
+        G: [37, 224, 79],
+        B: [61, 123, 255]
+      };
+      var CH_BIT = { R: 1, G: 2, B: 4 };
+      var COMBO = {
+        0: { name: "Shadow",  css: "#151515" },
+        1: { name: "Red",     css: "#ff3524" },
+        2: { name: "Green",   css: "#25e04f" },
+        4: { name: "Blue",    css: "#3d7bff" },
+        3: { name: "Yellow",  css: "#ffd21f" },
+        5: { name: "Magenta", css: "#ff35d1" },
+        6: { name: "Cyan",    css: "#22d8e6" },
+        7: { name: "White",   css: "#f4f4f4" }
+      };
+      // Easy is the old Hard pool: one target per performer, drawn
+      // from primaries, secondaries, and white. Hard uses the same
+      // pool but deals several targets per performer.
+      // Target pool: every lit mix plus 0 — Shadow, the share of a
+      // silhouette no beam touches at all. Unlit pixels are a real,
+      // scoreable class (score() counts them as mix 0), so Shadow
+      // can be a goal like any color: keep light OFF that share of
+      // the performer.
+      var COLOR_POOL = [0, 1, 2, 4, 3, 5, 6, 7];
+      // The truss has seven fixed hang points — the original five
+      // plus one at each far end, so a rig can throw light in from
+      // the wings. Lights can be added at any empty point and
+      // removed from any occupied one; a light's x always comes
+      // from its slot.
+      var SLOTS = [76, 193, 337, 480, 623, 767, 884];
+      var SLOT_POS = ["Far left", "Left", "Left center", "Center", "Right center", "Right", "Far right"];
+
+      /* ================= silhouette building =================
+         Each build fn returns a Path2D of filled shapes in local
+         coords (CHAR_W x CHAR_H box), reused for the black base,
+         the sample mask, and clipping the light tint.          */
+      function pPoly(pts) {
+        var p = new Path2D();
+        p.moveTo(pts[0], pts[1]);
+        for (var i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i + 1]);
+        p.closePath();
+        return p;
+      }
+      function pCirc(x, y, r) {
+        var p = new Path2D();
+        p.arc(x, y, r, 0, 6.2832);
+        return p;
+      }
+      function pEll(x, y, rx, ry, rot) {
+        var p = new Path2D();
+        p.ellipse(x, y, rx, ry, rot || 0, 0, 6.2832);
+        return p;
+      }
+      function pLine(x1, y1, x2, y2, w) {
+        var dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+        var nx = -dy / len * w / 2, ny = dx / len * w / 2;
+        return pPoly([x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny]);
+      }
+      function combine(parts) {
+        var p = new Path2D();
+        parts.forEach(function (q) { p.addPath(q); });
+        return p;
+      }
+
+      function buildSinger() {
+        return combine([
+          // mic stand + mic
+          pLine(112, 66, 122, 188, 5),
+          pPoly([104, 190, 138, 190, 122, 180]),
+          pEll(108, 58, 9, 12, -0.5),
+          // legs + shoes
+          pPoly([56, 118, 71, 118, 68, 192, 52, 192]),
+          pPoly([71, 118, 86, 118, 94, 192, 78, 192]),
+          pPoly([46, 194, 70, 194, 70, 188, 46, 188]),
+          pPoly([76, 194, 100, 194, 100, 188, 76, 188]),
+          // torso
+          pPoly([52, 52, 88, 52, 90, 122, 54, 122]),
+          // arm up to the mic, arm down
+          pLine(84, 60, 104, 62, 11),
+          pLine(54, 60, 38, 104, 11),
+          pCirc(37, 108, 6),
+          // head + hair sweep
+          pCirc(70, 32, 15),
+          pEll(62, 20, 13, 8, -0.4)
+        ]);
+      }
+
+      function buildGuitarist() {
+        return combine([
+          // legs (wide stance) + shoes
+          pPoly([48, 116, 64, 116, 52, 192, 36, 192]),
+          pPoly([64, 116, 82, 116, 100, 192, 84, 192]),
+          pPoly([28, 194, 54, 194, 54, 188, 28, 188]),
+          pPoly([82, 194, 108, 194, 108, 188, 82, 188]),
+          // torso leaning in
+          pPoly([46, 50, 84, 46, 88, 120, 50, 122]),
+          // head
+          pCirc(62, 28, 14),
+          pEll(56, 17, 12, 7, -0.3),
+          // guitar body + neck + headstock
+          pEll(84, 102, 30, 24, -0.5),
+          pEll(68, 114, 17, 14, -0.5),
+          pLine(100, 84, 140, 46, 9),
+          pPoly([136, 38, 148, 44, 142, 54, 132, 48]),
+          // arms: strumming + fretting
+          pLine(82, 58, 96, 92, 11),
+          pLine(50, 56, 92, 78, 11),
+          pLine(92, 78, 128, 54, 9)
+        ]);
+      }
+
+      function buildDrummer() {
+        return combine([
+          // cymbals + stands
+          pEll(24, 62, 24, 6, -0.12),
+          pLine(24, 64, 20, 150, 4),
+          pEll(128, 56, 26, 6, 0.1),
+          pLine(128, 58, 132, 150, 4),
+          // drummer body behind the kit
+          pPoly([58, 52, 92, 52, 94, 116, 56, 116]),
+          pCirc(75, 32, 14),
+          // arms with sticks
+          pLine(60, 60, 34, 84, 10),
+          pLine(34, 84, 24, 66, 4),
+          pLine(90, 60, 116, 78, 10),
+          pLine(116, 78, 126, 60, 4),
+          // toms
+          pCirc(50, 100, 15),
+          pCirc(100, 98, 16),
+          // snare
+          pEll(26, 122, 15, 10, 0),
+          pLine(26, 130, 22, 158, 4),
+          // bass drum
+          pCirc(75, 140, 34),
+          // legs to pedals
+          pLine(60, 116, 44, 168, 11),
+          pLine(90, 116, 108, 168, 11)
+        ]);
+      }
+
+      /* ================= state ================= */
+      // Each performer carries a list of targets: { bits, goal, now }.
+      // Easy deals exactly one; Hard deals two or three, and every
+      // sub-target has to be met to win.
+      var chars = [
+        { name: "Singer",    x: 118, build: buildSinger,    targets: [{ bits: 1, goal: 65, now: 0 }], samples: [], path: null },
+        { name: "Guitarist", x: 405, build: buildGuitarist, targets: [{ bits: 2, goal: 65, now: 0 }], samples: [], path: null },
+        { name: "Drummer",   x: 692, build: buildDrummer,   targets: [{ bits: 4, goal: 65, now: 0 }], samples: [], path: null }
+      ];
+      function makeLight(slot, color, tilt) {
+        return {
+          slot: slot, x: SLOTS[slot], pos: SLOT_POS[slot],
+          color: color, tilt: tilt || 0, doorL: 0, doorR: 0,
+          on: true, level: 1
+        };
+      }
+      // The starting rig hangs just the three lights directly
+      // over the performers — singer (slot 1), guitarist (slot 3),
+      // and drummer (slot 5). The far-end points and the slots
+      // between them start empty, so the player can grow the rig
+      // from there with the + glyphs on the truss.
+      var lights = [
+        makeLight(1, "R", -6),
+        makeLight(3, "G", 0),
+        makeLight(5, "B", 6)
+      ];
+      var mode = "easy";
+      var won = false;
+      var wonAt = 0;   // when the round was won, for the backdrop sign's fade-in
+
+      /* ================= offscreen canvases ================= */
+      var stage = document.getElementById("stage");
+      var ctx = stage.getContext("2d");
+      var lightCanvas = document.createElement("canvas");
+      lightCanvas.width = W; lightCanvas.height = H;
+      var lctx = lightCanvas.getContext("2d");
+      var tintCanvas = document.createElement("canvas");
+      tintCanvas.width = W; tintCanvas.height = H;
+      var tctx = tintCanvas.getContext("2d");
+      var maskCanvas = document.createElement("canvas");
+      maskCanvas.width = CHAR_W; maskCanvas.height = CHAR_H;
+      var mctx = maskCanvas.getContext("2d");
+
+      // Build each silhouette path once; precompute sample points for scoring.
+      chars.forEach(function (ch) {
+        ch.path = ch.build();
+        mctx.clearRect(0, 0, CHAR_W, CHAR_H);
+        mctx.fillStyle = "#fff";
+        mctx.fill(ch.path);
+        var data = mctx.getImageData(0, 0, CHAR_W, CHAR_H).data;
+        var pts = [];
+        for (var y = 0; y < CHAR_H; y += 3) {
+          for (var x = 0; x < CHAR_W; x += 3) {
+            if (data[(y * CHAR_W + x) * 4 + 3] > 120) pts.push([x, y]);
+          }
+        }
+        ch.samples = pts;
+      });
+
+      // Flattened sample list (stage coords + performer index) for
+      // the round solver's fast rig evaluations.
+      var flatX = [], flatY = [], flatC = [];
+      chars.forEach(function (ch, ci) {
+        ch.samples.forEach(function (p) {
+          flatX.push(ch.x + p[0]);
+          flatY.push(CHAR_Y + p[1]);
+          flatC.push(ci);
+        });
+      });
+      // Half-density copy for the solver's search phase: candidate
+      // rigs are scored on every second sample (plenty accurate
+      // with the safety margin), and only a rig that produces a
+      // deal is re-scored at full density for final verification.
+      var flatSX = [], flatSY = [], flatSC = [], searchTotals = [0, 0, 0];
+      for (var fi = 0; fi < flatX.length; fi += 2) {
+        flatSX.push(flatX[fi]);
+        flatSY.push(flatY[fi]);
+        flatSC.push(flatC[fi]);
+        searchTotals[flatC[fi]]++;
+      }
+
+      /* ================= beam geometry ================= */
+      // Effective beam half-angle for one side, from barn-door
+      // OCCLUSION rather than the door's own rotation angle. The light
+      // is a point source at the lens center (fixture-local (0, 17));
+      // the beam edge on a side is the ray from the lens grazing the
+      // flap tip, extended — the shadow line the door actually casts.
+      // While the tip is still outside the open cone the door cuts
+      // nothing (the first part of its swing is dead travel, as on a
+      // real fixture); once the tip crosses the cone edge, the beam
+      // edge follows the shadow ray, which sweeps non-linearly and
+      // does NOT track the flap angle. Only fully open do beam edge
+      // and door share an angle: both are BASE_HALF. Fully closed,
+      // the tip sits on the beam centerline, so the shadow ray is the
+      // centerline itself (half angle 0) and the center stop in
+      // beamAngles takes it from there.
+      function doorHalfAngle(side, door) {
+        var ang = flapAngle(side, door);
+        var tipX = side * 13 - Math.sin(ang) * FLAP_LEN;
+        var tipY = 16 + Math.cos(ang) * FLAP_LEN;
+        var shadow = Math.atan2(Math.abs(tipX), tipY - 17);
+        return Math.min(BASE_HALF, Math.max(0, shadow));
+      }
+      function beamAngles(L) {
+        var t = L.tilt * Math.PI / 180;
+        var leftHalf = doorHalfAngle(-1, L.doorL);
+        var rightHalf = doorHalfAngle(1, L.doorR);
+        // Doors close only as far as the center point of the beam:
+        // each half-angle floors at 0, so an edge can reach the beam
+        // centerline (t) but never swing past it. And the pair together
+        // always leaves a narrow sliver straddling that centerline, so
+        // closing both doors still can't fully close off the light.
+        var MIN_TOTAL = 5 * Math.PI / 180;
+        if (leftHalf + rightHalf < MIN_TOTAL) {
+          leftHalf = MIN_TOTAL / 2;
+          rightHalf = MIN_TOTAL / 2;
+        }
+        return { a1: t - leftHalf, a2: t + rightHalf, t: t };
+      }
+      // The lens center in stage coords. The fixture rotates about
+      // (L.x, APEX_Y - 8) with the lens at fixture-local (0, 17), so the
+      // lens swings sideways as the light tilts — it is NOT the fixed
+      // point (L.x, APEX_Y) the beam used to start from, which is why
+      // cone and fixture drifted out of sync. The beam and the lens
+      // glow are both built from the rotated fixture geometry below,
+      // so the cone always comes out of the fixture itself.
+      function lensPos(L) {
+        return fixtureToStage(L, 0, 17);
+      }
+      // The beam polygon, built so its edges START even with the barn
+      // doors and still cut by occlusion. Each side's boundary runs:
+      // hinge -> flap tip -> far point on the shadow ray. The edge
+      // begins at the door's own hinge on the lens rim and follows
+      // the flap out to its tip — the tip is always exactly on the
+      // beam boundary — then leaves the tip along the shadow
+      // direction from beamAngles (the ray from the lens center
+      // grazing the tip), so a closing door's cut still sweeps like
+      // a cast shadow instead of tracking the flap's angle. Fully
+      // open, the flap direction and the shadow direction are both
+      // BASE_HALF, so the two segments are collinear: one straight
+      // edge lying along the door. Rendering and scoring
+      // (pointInBeam) share this one polygon.
+      function beamQuad(L) {
+        var a = beamAngles(L);
+        var hingeL = fixtureToStage(L, -13, 16);
+        var hingeR = fixtureToStage(L, 13, 16);
+        var tipL = flapSegment(L, -1)[1];
+        var tipR = flapSegment(L, 1)[1];
+        return {
+          src: lensPos(L),
+          pts: [
+            hingeL, tipL,
+            [tipL[0] + BEAM_LEN * Math.sin(a.a1), tipL[1] + BEAM_LEN * Math.cos(a.a1)],
+            [tipR[0] + BEAM_LEN * Math.sin(a.a2), tipR[1] + BEAM_LEN * Math.cos(a.a2)],
+            tipR, hingeR
+          ]
+        };
+      }
+      function pointInBeam(L, px, py) {
+        // Even-odd ray casting over the beam polygon: unlike the old
+        // triangle test it stays correct while a door is cutting,
+        // when the tip vertices make the polygon non-convex.
+        var pts = beamQuad(L).pts;
+        var inside = false;
+        for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          var xi = pts[i][0], yi = pts[i][1];
+          var xj = pts[j][0], yj = pts[j][1];
+          if ((yi > py) !== (yj > py) &&
+              px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+      }
+
+      /* ---- in-scene control geometry ---- */
+      // Fixture-local point -> stage coords (fixture hangs at APEX_Y - 8
+      // and rotates by -tilt, matching drawFixture).
+      function fixtureToStage(L, lx, ly) {
+        var r = -L.tilt * Math.PI / 180;
+        var c = Math.cos(r), s = Math.sin(r);
+        return [L.x + lx * c - ly * s, (APEX_Y - 8) + lx * s + ly * c];
+      }
+      // Barn-door flap angle (fixture-local radians) for a side (-1/+1)
+      // and a door amount (0–100). Open (0): the flap flares outward past
+      // the lens, clear of the beam. Closing swings it inward, measured
+      // against the center point of the beam: at 100 the flap tip lands
+      // exactly on the beam centerline (fixture-local x = 0) and goes no
+      // further — the door reaches the center of the beam but never
+      // crosses it, matching the beam-cut limit in beamAngles. The
+      // closed angle is asin(hinge offset / flap length): the angle
+      // whose tip sits on that centerline. Shared by the drawing, the
+      // hit-test segment, and the drag inverse so all three agree.
+      function flapAngle(side, door) {
+        var closed = Math.asin(13 / FLAP_LEN);
+        // Open (0) flares to exactly BASE_HALF — the same max angle as
+        // the beam itself — so a fully open door lies along its beam
+        // edge and the cone touches the doors.
+        return side * ((door / 100) * (closed + BASE_HALF) - BASE_HALF);
+      }
+      // Barn-door flap segment (hinge -> tip) in stage coords.
+      // FLAP_LEN is shared with drawFixture: the flaps are drawn long
+      // enough that the tip knobs sit clear of the can body, so the
+      // door grab points live outside the fixture's aim zone.
+      var FLAP_LEN = 38;
+      function flapSegment(L, side) {
+        var door = side < 0 ? L.doorL : L.doorR;
+        var ang = flapAngle(side, door);
+        var hinge = [side * 13, 16];
+        var tip = [hinge[0] - Math.sin(ang) * FLAP_LEN, hinge[1] + Math.cos(ang) * FLAP_LEN];
+        return [fixtureToStage(L, hinge[0], hinge[1]), fixtureToStage(L, tip[0], tip[1])];
+      }
+      function distToSegment(px, py, a, b) {
+        var dx = b[0] - a[0], dy = b[1] - a[1];
+        var len2 = dx * dx + dy * dy || 1;
+        var t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2));
+        var ex = a[0] + t * dx - px, ey = a[1] + t * dy - py;
+        return Math.hypot(ex, ey);
+      }
+      function rgba(rgb, a) {
+        return "rgba(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + "," + a + ")";
+      }
+
+      /* ================= rendering ================= */
+      function lampLevel(L) {
+        // Smooth brightness 0..1. During the show this eases up/down
+        // (fade) instead of snapping with L.on; in play it is 1.
+        if (typeof L.level === "number") return Math.max(0, Math.min(1, L.level));
+        return L.on === false ? 0 : 1;
+      }
+      function drawBeamShape(c, L, innerA, outerA) {
+        var lvl = lampLevel(L);
+        if (lvl <= 0.02) return;   // lamp faded right down in the show
+        var q = beamQuad(L);
+        var rgb = CH_RGB[L.color];
+        var farL = q.pts[2], farR = q.pts[3];
+        var farX = (farL[0] + farR[0]) / 2, farY = (farL[1] + farR[1]) / 2;
+        var g = c.createLinearGradient(q.src[0], q.src[1], farX, farY);
+        g.addColorStop(0, rgba(rgb, innerA * lvl));
+        g.addColorStop(0.55, rgba(rgb, innerA * 0.55 * lvl));
+        g.addColorStop(1, rgba(rgb, outerA * lvl));
+        c.fillStyle = g;
+        c.beginPath();
+        c.moveTo(q.pts[0][0], q.pts[0][1]);
+        for (var k = 1; k < q.pts.length; k++) c.lineTo(q.pts[k][0], q.pts[k][1]);
+        c.closePath();
+        c.fill();
+      }
+
+      function drawFixture(L) {
+        var rgb = CH_RGB[L.color];
+        // hanger
+        ctx.strokeStyle = "#3a3a42";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(L.x, TRUSS_Y + 6);
+        ctx.lineTo(L.x, APEX_Y - 26);
+        ctx.stroke();
+        ctx.save();
+        ctx.translate(L.x, APEX_Y - 8);
+        // Beam math points the cone at x + LEN*sin(tilt), so the can must
+        // tip the same way: negate the canvas rotation (positive canvas
+        // rotation swings the downward lens to the left, opposite the beam).
+        ctx.rotate(-L.tilt * Math.PI / 180);
+        // barn door flaps (hinged at the lens rim; angle follows door amount)
+        ctx.fillStyle = "#26262c";
+        var flapLen = FLAP_LEN;
+        [-1, 1].forEach(function (side) {
+          var door = side < 0 ? L.doorL : L.doorR;
+          // open (0%): flap flared outward past the lens; closed (100%): tip swung in to the beam centerline, no further
+          var ang = flapAngle(side, door);
+          ctx.save();
+          ctx.translate(side * 13, 16);
+          ctx.rotate(ang);
+          ctx.fillRect(side < 0 ? -3 : 0, 0, 4.5, flapLen);
+          ctx.restore();
+        });
+        // can body
+        ctx.fillStyle = "#222228";
+        ctx.strokeStyle = "#45454f";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-15, -22, 30, 40, 6); else ctx.rect(-15, -22, 30, 40);
+        ctx.fill(); ctx.stroke();
+        // yoke
+        ctx.strokeStyle = "#45454f";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-15, -14); ctx.lineTo(-20, -26);
+        ctx.moveTo(15, -14); ctx.lineTo(20, -26);
+        ctx.stroke();
+        // lens — dark glass that fades up with the lamp's level
+        var lvlF = lampLevel(L);
+        ctx.fillStyle = "#17171d";
+        ctx.beginPath();
+        ctx.ellipse(0, 17, 12.5, 6.5, 0, 0, 6.2832);
+        ctx.fill();
+        if (lvlF > 0.02) {
+          var lg = ctx.createRadialGradient(0, 17, 1, 0, 17, 14);
+          lg.addColorStop(0, "rgba(255,255,255," + (0.95 * lvlF) + ")");
+          lg.addColorStop(0.35, rgba(rgb, 0.95 * lvlF));
+          lg.addColorStop(1, rgba(rgb, 0.55 * lvlF));
+          ctx.fillStyle = lg;
+          ctx.beginPath();
+          ctx.ellipse(0, 17, 12.5, 6.5, 0, 0, 6.2832);
+          ctx.fill();
+        }
+        ctx.restore();
+        // glow at lens (unrotated, additive) — centered on the actual
+        // rotated lens position, same as the beam's origin geometry;
+        // fades with the lamp level during the show
+        if (lvlF > 0.02) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          var lp = lensPos(L);
+          var gg = ctx.createRadialGradient(lp[0], lp[1], 0, lp[0], lp[1], 34);
+          gg.addColorStop(0, rgba(rgb, 0.5 * lvlF));
+          gg.addColorStop(1, rgba(rgb, 0));
+          ctx.fillStyle = gg;
+          ctx.fillRect(lp[0] - 34, lp[1] - 34, 68, 68);
+          ctx.restore();
+        }
+      }
+
+      /* ---- on-stage controls: tilt arc + barn-door flap knobs. The
+              beam itself carries no handles — doors are worked only
+              from the knobs on the flap tips. ---- */
+      function drawSceneControls() {
+        lights.forEach(function (L, i) {
+          var rgb = CH_RGB[L.color];
+          var active = !won && (i === selectedIdx || i === dragIdx || (hoverHit && hoverHit.idx === i));
+          // tilt range arc for the active light
+          if (active) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(240,237,230,0.28)";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 5]);
+            ctx.beginPath();
+            for (var deg = -MAX_TILT; deg <= MAX_TILT; deg += 4) {
+              var rr = deg * Math.PI / 180;
+              var ax = L.x + 62 * Math.sin(rr), ay = (APEX_Y - 8) + 62 * Math.cos(rr);
+              if (deg === -MAX_TILT) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = "rgba(240,237,230,0.5)";
+            ctx.font = "600 10px Barlow, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("-" + MAX_TILT + "°", L.x - 62 * Math.sin(MAX_TILT * Math.PI / 180), APEX_Y + 32);
+            ctx.fillText("+" + MAX_TILT + "°", L.x + 62 * Math.sin(MAX_TILT * Math.PI / 180), APEX_Y + 32);
+            ctx.restore();
+          }
+          // barn-door flap knobs (tip of each flap)
+          [-1, 1].forEach(function (side) {
+            var seg = flapSegment(L, side);
+            var tip = seg[1];
+            var hot = hoverHit && hoverHit.idx === i && hoverHit.part === (side < 0 ? "flapL" : "flapR");
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(tip[0], tip[1], hot ? 8 : 6, 0, 6.2832);
+            ctx.fillStyle = hot ? "#ffd98a" : "rgba(16,16,20,0.9)";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = hot ? "#ffd98a" : "rgba(240,237,230," + (active ? "0.85" : "0.45") + ")";
+            ctx.stroke();
+            ctx.restore();
+          });
+          // Aim control point — a circle in the middle of the fixture,
+          // drawn exactly like the barn-door end circles so all the
+          // grab points on a fixture read the same way. It sits on the
+          // pivot (L.x, APEX_Y - 8), the centre of the can.
+          (function () {
+            var cx = L.x, cy = APEX_Y - 8;
+            var hotAim = !won && ((hoverHit && hoverHit.idx === i && hoverHit.part === "tilt") ||
+              (dragIdx === i && dragPart === "tilt"));
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, hotAim ? 10 : 8, 0, 6.2832);
+            ctx.fillStyle = hotAim ? "#ffd98a" : "rgba(16,16,20,0.92)";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = hotAim ? "#ffd98a" : "rgba(240,237,230," + (active || hotAim ? "0.9" : "0.55") + ")";
+            ctx.stroke();
+            // small centre dot so the pivot reads at a glance
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2.2, 0, 6.2832);
+            ctx.fillStyle = hotAim ? "#1c1503" : "rgba(240,237,230,0.85)";
+            ctx.fill();
+            ctx.restore();
+          })();
+          // Remove glyph: a − circle sitting ON the truss, directly
+          // above the fixture — up out of the way of the aim circle
+          // and the barn-door knobs around the can. Same size
+          // language as the other control points. Clicking it takes
+          // the light off the truss (never the last one — the stage
+          // keeps at least one lamp).
+          if (!won && lights.length > 1) {
+            var rx = L.x, ry = TRUSS_Y;
+            var hotRm = hoverHit && hoverHit.idx === i && hoverHit.part === "remove";
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(rx, ry, hotRm ? 10 : 8, 0, 6.2832);
+            ctx.fillStyle = hotRm ? "#ff8a7a" : "rgba(16,16,20,0.92)";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = hotRm ? "#ff8a7a" : "rgba(240,237,230,0.55)";
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(rx - 4.5, ry);
+            ctx.lineTo(rx + 4.5, ry);
+            ctx.lineWidth = 2.4;
+            ctx.strokeStyle = hotRm ? "#1c1503" : "rgba(240,237,230,0.9)";
+            ctx.stroke();
+            ctx.restore();
+          }
+        });
+        // Add glyphs: a + circle hanging at every empty truss point,
+        // with a short hanger stub from the truss bar. Clicking one
+        // hangs a new light there.
+        if (!won && lights.length < SLOTS.length) {
+          SLOTS.forEach(function (sx, s) {
+            var occupied = lights.some(function (L) { return L.slot === s; });
+            if (occupied) return;
+            var hotAdd = hoverHit && hoverHit.part === "add" && hoverHit.slot === s;
+            ctx.save();
+            ctx.strokeStyle = "rgba(240,237,230,0.35)";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(sx, TRUSS_Y + 6);
+            ctx.lineTo(sx, APEX_Y - 8 - 11);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(sx, APEX_Y - 8, hotAdd ? 12 : 10, 0, 6.2832);
+            ctx.fillStyle = hotAdd ? "#ffd98a" : "rgba(16,16,20,0.85)";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = hotAdd ? "#ffd98a" : "rgba(240,237,230,0.55)";
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(sx - 5, APEX_Y - 8);
+            ctx.lineTo(sx + 5, APEX_Y - 8);
+            ctx.moveTo(sx, APEX_Y - 8 - 5);
+            ctx.lineTo(sx, APEX_Y - 8 + 5);
+            ctx.lineWidth = 2.4;
+            ctx.strokeStyle = hotAdd ? "#1c1503" : "rgba(240,237,230,0.9)";
+            ctx.stroke();
+            ctx.restore();
+          });
+        }
+      }
+
+      function render() {
+        // ---- backdrop ----
+        var bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, "#0b0b10");
+        bg.addColorStop(0.72, "#101017");
+        bg.addColorStop(0.7201, "#17130e");
+        bg.addColorStop(1, "#241b10");
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        // back wall panels
+        ctx.fillStyle = "rgba(255,255,255,0.025)";
+        for (var i = 0; i < 6; i++) ctx.fillRect(28 + i * 156, 90, 2, FLOOR_Y - 120);
+        // ---- level-complete sign: painted on the back wall as part
+        //      of the set, not a UI overlay. It lives in the backdrop,
+        //      so the show's beams play over it while it runs. Fades
+        //      up over the first moments of the show (instant under
+        //      reduced-motion), in the muted gold of stage paint. ----
+        if (won) {
+          var reducedSign = window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          var signFade = reducedSign ? 1 :
+            Math.min(1, Math.max(0, (performance.now() - wonAt) / 1600));
+          ctx.save();
+          ctx.textAlign = "center";
+          try { ctx.letterSpacing = "12px"; } catch (e) {}
+          ctx.font = "700 60px 'Barlow Condensed', 'Barlow', sans-serif";
+          ctx.fillStyle = "rgba(233, 199, 128, " + (0.5 * signFade) + ")";
+          ctx.fillText("LEVEL COMPLETE", W / 2, 272);
+          try { ctx.letterSpacing = "0px"; } catch (e) {}
+          ctx.strokeStyle = "rgba(233, 199, 128, " + (0.38 * signFade) + ")";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(W / 2 - 218, 296);
+          ctx.lineTo(W / 2 + 218, 296);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // floor boards
+        ctx.strokeStyle = "rgba(255,190,90,0.07)";
+        ctx.lineWidth = 1;
+        for (var f = 0; f < 5; f++) {
+          ctx.beginPath();
+          ctx.moveTo(0, FLOOR_Y + 16 + f * 17);
+          ctx.lineTo(W, FLOOR_Y + 16 + f * 17);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(255,200,110,0.10)";
+        ctx.fillRect(0, FLOOR_Y, W, 2);
+
+        // ---- beams on stage (additive) ----
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        lights.forEach(function (L) { drawBeamShape(ctx, L, 0.34, 0.02); });
+        ctx.restore();
+
+        // ---- light-only canvas for character tinting ----
+        lctx.clearRect(0, 0, W, H);
+        lctx.save();
+        lctx.globalCompositeOperation = "lighter";
+        lights.forEach(function (L) { drawBeamShape(lctx, L, 0.88, 0.55); });
+        lctx.restore();
+
+        // ---- characters: black base, then the additive light clipped
+        //      to the silhouette so each lit region takes the mixed color ----
+        chars.forEach(function (ch) {
+          ctx.save();
+          ctx.translate(ch.x, CHAR_Y);
+          ctx.fillStyle = "#000";
+          ctx.fill(ch.path);
+          ctx.restore();
+
+          tctx.clearRect(0, 0, W, H);
+          tctx.save();
+          tctx.translate(ch.x, CHAR_Y);
+          tctx.clip(ch.path);
+          tctx.setTransform(1, 0, 0, 1, 0, 0);
+          tctx.drawImage(lightCanvas, 0, 0);
+          tctx.restore();
+          ctx.drawImage(tintCanvas, 0, 0);
+
+          // name plate
+          ctx.font = "600 15px Barlow, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(240,237,230,0.66)";
+          ctx.fillText(ch.name.toUpperCase(), ch.x + CHAR_W / 2, FLOOR_Y + 52);
+        });
+
+        // ---- truss + fixtures ----
+        ctx.fillStyle = "#1b1b21";
+        ctx.fillRect(30, TRUSS_Y - 9, W - 60, 10);
+        ctx.fillRect(30, TRUSS_Y + 7, W - 60, 4);
+        ctx.fillStyle = "#2c2c34";
+        for (var t = 40; t < W - 40; t += 26) ctx.fillRect(t, TRUSS_Y - 9, 3, 20);
+        lights.forEach(drawFixture);
+        drawSceneControls();
+      }
+
+      /* ================= scoring ================= */
+      function score() {
+        chars.forEach(function (ch) {
+          // One pass over the samples, counting how many pixels land
+          // on each exact color mix; each target then reads its own
+          // count (targets are disjoint — a pixel is exactly one mix).
+          var counts = {};
+          for (var i = 0; i < ch.samples.length; i++) {
+            var px = ch.x + ch.samples[i][0];
+            var py = CHAR_Y + ch.samples[i][1];
+            var bits = 0;
+            for (var j = 0; j < lights.length; j++) {
+              if (pointInBeam(lights[j], px, py)) bits |= CH_BIT[lights[j].color];
+            }
+            counts[bits] = (counts[bits] || 0) + 1;
+          }
+          var total = ch.samples.length || 1;
+          ch.targets.forEach(function (t) {
+            t.now = Math.round((counts[t.bits] || 0) / total * 100);
+          });
+        });
+      }
+
+      /* ================= DOM: goal cards ================= */
+      var goalsEl = document.getElementById("goals");
+      var goalCards = chars.map(function (ch, i) {
+        var card = document.createElement("div");
+        card.className = "goal-card";
+        card.innerHTML =
+          '<div class="goal-head">' +
+            '<span class="goal-name"></span>' +
+            '<span class="met-badge">All goals met &#10003;</span>' +
+          '</div>' +
+          '<div class="goal-rows"></div>';
+        goalsEl.appendChild(card);
+        return {
+          card: card,
+          name: card.querySelector(".goal-name"),
+          rowsEl: card.querySelector(".goal-rows"),
+          rows: []
+        };
+      });
+
+      // Rebuild the target rows when a round is dealt (Hard deals a
+      // different number of targets per performer than Easy).
+      function buildGoalRows() {
+        chars.forEach(function (ch, i) {
+          var ui = goalCards[i];
+          ui.name.textContent = ch.name;
+          ui.rowsEl.innerHTML = "";
+          ui.rows = ch.targets.map(function (t) {
+            var row = document.createElement("div");
+            row.className = "trow";
+            row.innerHTML =
+              '<div class="trow-head">' +
+                '<span class="swatch"></span>' +
+                '<span class="trow-name"></span>' +
+                '<span class="trow-nums"><span class="now"></span> <span class="goal-lbl"></span></span>' +
+              '</div>' +
+              '<div class="bar"><div class="fill"></div><div class="goal-tick"></div></div>';
+            ui.rowsEl.appendChild(row);
+            var combo = COMBO[t.bits];
+            row.querySelector(".swatch").style.background = combo.css;
+            row.querySelector(".trow-name").textContent = combo.name;
+            return {
+              row: row,
+              fill: row.querySelector(".fill"),
+              tick: row.querySelector(".goal-tick"),
+              now: row.querySelector(".now"),
+              goalLbl: row.querySelector(".goal-lbl"),
+              css: combo.css
+            };
+          });
+        });
+      }
+
+      function refreshGoals() {
+        chars.forEach(function (ch, i) {
+          var ui = goalCards[i];
+          var allMet = true;
+          ch.targets.forEach(function (t, k) {
+            var r = ui.rows[k];
+            if (!r) return;
+            var met = t.now >= t.goal;
+            if (!met) allMet = false;
+            r.fill.style.width = t.now + "%";
+            r.fill.style.background = met ? "" : r.css;
+            r.tick.style.left = "calc(" + t.goal + "% - 1px)";
+            r.now.textContent = t.now + "%";
+            r.goalLbl.textContent = "goal " + t.goal + "%";
+            r.row.classList.toggle("met", met);
+          });
+          ui.card.classList.toggle("met", allMet);
+        });
+      }
+
+      /* ================= DOM: on-stage color dots =================
+         One pill per light, rebuilt with the rig: positioned over
+         its slot, labelled L1..Ln in truss order.                 */
+      var sceneUi = document.getElementById("sceneUi");
+      var sceneCtls = [];
+      var sceneDots = [];
+      function buildSceneCtls() {
+        sceneUi.innerHTML = "";
+        sceneCtls = lights.map(function (L, i) {
+          var el = document.createElement("div");
+          el.className = "scene-light-ctl";
+          el.style.left = (L.x / W * 100) + "%";
+          el.innerHTML =
+            '<span class="sc-label">L' + (i + 1) + '</span>' +
+            '<button class="scene-dot" data-light="' + i + '" data-ch="R" aria-pressed="false" aria-label="Light ' + (i + 1) + ' red"></button>' +
+            '<button class="scene-dot" data-light="' + i + '" data-ch="G" aria-pressed="false" aria-label="Light ' + (i + 1) + ' green"></button>' +
+            '<button class="scene-dot" data-light="' + i + '" data-ch="B" aria-pressed="false" aria-label="Light ' + (i + 1) + ' blue"></button>';
+          sceneUi.appendChild(el);
+          return el;
+        });
+        sceneDots = Array.prototype.slice.call(sceneUi.querySelectorAll(".scene-dot"));
+        sceneDots.forEach(function (b) {
+          b.addEventListener("click", function () {
+            var i = +b.getAttribute("data-light");
+            lights[i].color = b.getAttribute("data-ch");
+            selectedIdx = i;
+            syncSceneDots();
+            syncSceneSelection();
+            update();
+          });
+        });
+        if (won) sceneDots.forEach(function (b) { b.disabled = true; });
+        syncSceneDots();
+        syncSceneSelection();
+      }
+      function syncSceneSelection() {
+        sceneCtls.forEach(function (el, i) {
+          el.classList.toggle("selected", i === selectedIdx);
+        });
+      }
+
+      // Reflect each light's current color on its on-stage dots
+      // (the pressed dot is the lit channel). All light control is
+      // in-scene now, so this is the only DOM sync the rig needs.
+      function syncSceneDots() {
+        sceneDots.forEach(function (b) {
+          var L = lights[+b.getAttribute("data-light")];
+          if (L) b.setAttribute("aria-pressed", b.getAttribute("data-ch") === L.color ? "true" : "false");
+        });
+      }
+
+      /* ================= game flow =================
+         No end screen: when every goal is met the round is won,
+         the fixtures lock where they are, and the rig starts
+         running a little show — the lamps chase through on/off
+         patterns over the winning look until the next round.   */
+      var nextRoundBtn = document.getElementById("nextRound");
+
+      // Chase the lamps run once the show starts (bitmask per step:
+      // bit i set = light i's TARGET level is 1, otherwise 0). All-on
+      // bookends, a chase out and back, pair sweeps, one blackout
+      // beat. Nothing snaps: each lamp's level eases toward its
+      // target every animation frame, so steps crossfade — lamps
+      // fade in and out instead of hard flashing on/off.
+      // The pattern is built for however many lights are on the
+      // truss when the show starts: all-on bookends, a chase out
+      // and back, pair sweeps, one blackout beat.
+      var showPattern = [7, 1, 2, 4, 2, 7, 3, 6, 5, 7, 0, 7, 4, 2, 1];
+      function buildShowPattern(n) {
+        var all = (1 << n) - 1;
+        var steps = [all], i;
+        for (i = 0; i < n; i++) steps.push(1 << i);
+        for (i = n - 2; i >= 0; i--) steps.push(1 << i);
+        steps.push(all);
+        for (i = 0; i < n; i++) steps.push((1 << i) | (1 << ((i + 1) % n)));
+        steps.push(all, 0, all);
+        return steps;
+      }
+      var showAnimId = null;
+      var showStepIdx = 0;
+      var showStepAt = 0;
+      var showLastFrame = 0;
+      var showTargets = [1, 1, 1];
+
+      function setShowTargets() {
+        var mask = showPattern[showStepIdx % showPattern.length];
+        lights.forEach(function (L, i) {
+          showTargets[i] = (mask & (1 << i)) ? 1 : 0;
+          L.on = !!showTargets[i];
+        });
+      }
+      function startShow() {
+        showPattern = buildShowPattern(lights.length);
+        var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var stepMs = reduced ? 2400 : 1500;   // hold per pattern step
+        var fadeTau = reduced ? 650 : 380;    // fade time constant (ms)
+        showStepIdx = 0;
+        setShowTargets();
+        showStepAt = performance.now();
+        showLastFrame = showStepAt;
+        function tick(now) {
+          if (!won) { showAnimId = null; return; }
+          var dt = Math.min(80, now - showLastFrame);
+          showLastFrame = now;
+          if (now - showStepAt >= stepMs) {
+            showStepIdx++;
+            showStepAt = now;
+            setShowTargets();
+          }
+          // Exponential ease toward the target: fast start, gentle
+          // settle — reads as a theatrical fade, never a cut.
+          var k = 1 - Math.exp(-dt / fadeTau);
+          lights.forEach(function (L, i) {
+            var cur = typeof L.level === "number" ? L.level : 1;
+            var next = cur + (showTargets[i] - cur) * k;
+            if (Math.abs(showTargets[i] - next) < 0.005) next = showTargets[i];
+            L.level = next;
+            if (sceneCtls[i]) sceneCtls[i].style.opacity = String(0.35 + 0.65 * next);
+          });
+          render();
+          showAnimId = requestAnimationFrame(tick);
+        }
+        showAnimId = requestAnimationFrame(tick);
+      }
+      function stopShow() {
+        if (showAnimId) { cancelAnimationFrame(showAnimId); showAnimId = null; }
+        lights.forEach(function (L) { L.on = true; L.level = 1; });
+        sceneCtls.forEach(function (el) { el.style.opacity = "1"; });
+      }
+      // While the show runs the rig is locked: no aiming, no barn
+      // doors, no color changes, no adding or removing lights —
+      // the canvas ignores input and the on-stage dots disable.
+      function setControlsLocked(locked) {
+        stage.classList.toggle("locked", locked);
+        stage.style.cursor = locked ? "default" : "";
+        sceneDots.forEach(function (b) { b.disabled = locked; });
+      }
+
+      function update() {
+        if (won) { render(); return; }   // show is running; the look is frozen
+        score();
+        render();
+        refreshGoals();
+        var allMet = chars.every(function (ch) {
+          return ch.targets.every(function (t) { return t.now >= t.goal; });
+        });
+        if (allMet) {
+          won = true;
+          wonAt = performance.now();
+          setControlsLocked(true);
+          nextRoundBtn.classList.add("show");
+          startShow();
+        }
+      }
+
+      function shuffle(a) {
+        for (var i = a.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        return a;
+      }
+      // Goal ranges for a single target — the old Hard scaling:
+      // the goal scales by how many lights have to overlap on the
+      // performer to make the color. A flat 50–70% for every target
+      // dealt impossible rounds — white needs all three beams
+      // covering the same stretch of silhouette at once, which the
+      // fixtures' reach and spread can't always deliver at 70%.
+      function targetRanges(bits) {
+        // Shadow deals lower than any lit color: with seven wide
+        // beams on the truss, keeping even half of a performer
+        // completely untouched is genuinely hard, and in Hard sets
+        // a Shadow goal also competes with the lit goals sharing
+        // the same silhouette.
+        if (bits === 0) return [20, 25, 30, 35, 40];
+        var n = (bits & 1 ? 1 : 0) + (bits & 2 ? 1 : 0) + (bits & 4 ? 1 : 0);
+        if (n === 3) return [45, 50, 55];        // white: 45–55
+        if (n === 2) return [50, 55, 60];        // secondaries: 50–60
+        return [55, 60, 65, 70];                 // primaries: 55–70
+      }
+      // Hard sub-goal sets: several colors per performer, sized so
+      // the set stays reachable — the sub-targets are disjoint pixel
+      // shares, so their goals must sum to well under 100%. The
+      // three-target set mirrors the requested shape (30 / 30 / 20).
+      var HARD_SETS = [
+        [30, 30],
+        [35, 30],
+        [30, 25],
+        [30, 30, 20],
+        [30, 25, 20],
+        [25, 25, 20]
+      ];
+
+      /* ================= round solver =================
+         Rounds are no longer dealt at random and hoped for the
+         best — random targets kept producing impossible levels
+         (e.g. 70% white on a performer no arrangement of beams
+         can cover that way). Instead every round is generated
+         FROM a witness: a concrete full-truss rig (any colors,
+         tilts, and door settings the player could dial in,
+         using all seven hang points — the player can always add
+         lights up to the full truss) that is scored with the
+         exact same beam-polygon geometry as the game itself.
+         Targets are only dealt if that rig's real percentages
+         clear them with margin, and the deal is re-verified
+         against the percentages before it ships. If no witness
+         clears the normal goal ranges after a few hundred
+         tries, the margin shrinks, and in the last resort the
+         goals are derived from the witness's own percentages —
+         so a dealt round always carries a proof it can be won. */
+      var solutionRig = null;   // the witness rig behind the current round
+
+      // Exact per-mix percentages a rig achieves on each performer,
+      // using beamQuad polygons (built once per light, not per
+      // sample) with the same even-odd test as pointInBeam. Pass
+      // coarse=true to score on the half-density search samples.
+      function rigPercents(rig, coarse) {
+        var xs = coarse ? flatSX : flatX;
+        var ys = coarse ? flatSY : flatY;
+        var cs = coarse ? flatSC : flatC;
+        var quads = rig.map(function (L) { return beamQuad(L).pts; });
+        var counts = chars.map(function () { return [0, 0, 0, 0, 0, 0, 0, 0]; });
+        for (var i = 0; i < xs.length; i++) {
+          var px = xs[i], py = ys[i], bits = 0;
+          for (var j = 0; j < quads.length; j++) {
+            var pts = quads[j], inside = false;
+            for (var a = 0, b = pts.length - 1; a < pts.length; b = a++) {
+              var xi = pts[a][0], yi = pts[a][1];
+              var xj = pts[b][0], yj = pts[b][1];
+              if ((yi > py) !== (yj > py) &&
+                  px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+            }
+            if (inside) bits |= CH_BIT[rig[j].color];
+          }
+          counts[cs[i]][bits]++;
+        }
+        return counts.map(function (row, ci) {
+          var total = (coarse ? searchTotals[ci] : chars[ci].samples.length) || 1;
+          return row.map(function (n) { return n / total * 100; });
+        });
+      }
+      function aimTiltAt(slotX, tx) {
+        var midY = CHAR_Y + CHAR_H / 2;
+        return Math.atan2(tx - slotX, midY - APEX_Y) * 180 / Math.PI;
+      }
+      // A plausible winning rig: every hang point occupied, channel
+      // counts balanced (3/2/2), each lamp aimed at a performer —
+      // grouped by stage zone most of the time, so beams pool on
+      // one performer at a time and produce strong single mixes,
+      // with jitter and mostly-open doors for partition variety.
+      function randomWitnessRig() {
+        var channels = shuffle(["R", "G", "B", "R", "G", "B", "R"].slice(0, SLOTS.length));
+        var grouped = Math.random() < 0.6;
+        var groups = [[0, 1], [2, 3, 4], [5, 6]];
+        // Witness styles, so the solver can prove Shadow rounds
+        // too: some rigs spare one performer entirely (no lamp
+        // aims at them, so most of their silhouette stays unlit
+        // while the others get the full rig), and some run narrow
+        // doors throughout (slivers of light, wide shadow between
+        // them). Without these, aimed wide-open rigs light nearly
+        // everything and no Shadow goal could ever be verified.
+        var roll = Math.random();
+        var spared = roll < 0.25 ? Math.floor(Math.random() * chars.length) : -1;
+        var narrow = spared < 0 && roll < 0.45;
+        function door() {
+          if (narrow) {
+            return Math.random() < 0.8
+              ? [40, 55, 70, 85, 100][Math.floor(Math.random() * 5)]
+              : Math.floor(Math.random() * 26);
+          }
+          return Math.random() < 0.72 ? 0 : [25, 50, 75, 100][Math.floor(Math.random() * 4)];
+        }
+        function nearestChar(sx, skip) {
+          var ci = -1, best = Infinity;
+          chars.forEach(function (ch, k) {
+            if (k === skip) return;
+            var d = Math.abs(ch.x + CHAR_W / 2 - sx);
+            if (d < best) { best = d; ci = k; }
+          });
+          return ci;
+        }
+        function randomChar(skip) {
+          var ci = Math.floor(Math.random() * chars.length);
+          if (ci === skip) ci = (ci + 1) % chars.length;
+          return ci;
+        }
+        // Partition offsets: when a group of lights shares one
+        // performer, they aim at different thirds of the
+        // silhouette (rotated per rig) instead of all piling onto
+        // its center. Center-piled beams make one dominant overlap
+        // mix per performer — White nearly every time, and never
+        // the two or three substantial zones Hard sets need.
+        // Partitioned aim leaves pure-color flanks and secondary
+        // overlap bands, so primaries, secondaries, and Shadow
+        // slices all reach dealable shares.
+        var partRot = Math.floor(Math.random() * 3);
+        return SLOTS.map(function (sx, s) {
+          var ci;
+          if (spared >= 0) {
+            ci = Math.random() < 0.6 ? nearestChar(sx, spared) : randomChar(spared);
+          } else if (grouped) {
+            ci = groups.findIndex(function (g) { return g.indexOf(s) >= 0; });
+          } else if (Math.random() < 0.6) {
+            ci = nearestChar(sx, -1);
+          } else {
+            ci = Math.floor(Math.random() * chars.length);
+          }
+          var tx = chars[ci].x + CHAR_W / 2;
+          if (grouped && spared < 0) {
+            var grp = groups[ci];
+            tx += [-52, 0, 52][(grp.indexOf(s) + partRot) % 3];
+          } else {
+            tx += Math.random() * 70 - 35;
+          }
+          var tilt = aimTiltAt(sx, tx) + (Math.random() * 10 - 5);
+          tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, tilt));
+          return {
+            slot: s, x: sx, color: channels[s], tilt: tilt,
+            doorL: door(), doorR: door(), on: true, level: 1
+          };
+        });
+      }
+      // Easy deal from a witness: one target per performer, chosen
+      // from every mix whose real percentage clears a normal-range
+      // goal plus the safety margin. The pick is weighted —
+      // witness rigs overlap so much that White qualifies almost
+      // every time, and an unweighted first-match dealt White for
+      // nearly half of all targets; primaries and Shadow are
+      // weighted up so the full pool actually shows up.
+      var DEAL_WEIGHTS = { 0: 3, 1: 3, 2: 3, 4: 3, 3: 2, 5: 2, 6: 2, 7: 1 };
+      function tryDealEasy(pcts, margin) {
+        var out = [];
+        for (var ci = 0; ci < chars.length; ci++) {
+          var options = [];
+          COLOR_POOL.forEach(function (bits) {
+            var ok = targetRanges(bits).filter(function (g) {
+              return pcts[ci][bits] >= g + margin;
+            });
+            if (ok.length) {
+              options.push({ bits: bits, goal: ok[Math.floor(Math.random() * ok.length)] });
+            }
+          });
+          if (!options.length) return null;
+          var totalW = options.reduce(function (s, o) { return s + DEAL_WEIGHTS[o.bits]; }, 0);
+          var pick = Math.random() * totalW, found = options[options.length - 1];
+          for (var k = 0; k < options.length; k++) {
+            pick -= DEAL_WEIGHTS[options[k].bits];
+            if (pick <= 0) { found = options[k]; break; }
+          }
+          out.push([found]);
+        }
+        return out;
+      }
+      // Hard deal from a witness: a goal set per performer, colors
+      // best-fitted to the percentages the witness actually makes
+      // (largest goal gets the smallest percentage that clears it,
+      // leaving the big mixes for the other sub-targets).
+      function tryDealHard(pcts, margin) {
+        var out = [];
+        for (var ci = 0; ci < chars.length; ci++) {
+          var sets = shuffle(HARD_SETS.slice());
+          var found = null;
+          for (var s = 0; s < sets.length && !found; s++) {
+            var goals = sets[s].slice().sort(function (a, b) { return b - a; });
+            var remaining = COLOR_POOL.slice();
+            var picks = [], okAll = true;
+            for (var g = 0; g < goals.length; g++) {
+              remaining.sort(function (a, b) { return pcts[ci][a] - pcts[ci][b]; });
+              var pick = -1;
+              for (var r = 0; r < remaining.length; r++) {
+                if (pcts[ci][remaining[r]] >= goals[g] + margin) { pick = remaining[r]; break; }
+              }
+              if (pick < 0) { okAll = false; break; }
+              remaining.splice(remaining.indexOf(pick), 1);
+              picks.push({ bits: pick, goal: goals[g] });
+            }
+            if (okAll) found = picks;
+          }
+          if (!found) return null;
+          out.push(found);
+        }
+        return out;
+      }
+      function verifyDeal(dealt, pcts) {
+        return dealt.every(function (list, ci) {
+          return list.every(function (t) { return pcts[ci][t.bits] >= t.goal; });
+        });
+      }
+      // Last-resort deal: goals read straight off a witness's real
+      // percentages (a few points under what it achieves), so the
+      // round is winnable by construction even if no witness ever
+      // cleared the normal ranges.
+      function fallbackDeal(pcts) {
+        // The goal must never exceed what the witness achieved,
+        // even for a mix it barely makes — no floor that can push
+        // the goal past the percentage itself.
+        function goalFrom(pct) {
+          var g = Math.floor(pct) - 6;
+          if (g > pct - 2) g = Math.floor(pct) - 1;
+          if (g < 1) g = Math.max(1, Math.floor(pct));
+          return g;
+        }
+        return chars.map(function (ch, ci) {
+          var ranked = COLOR_POOL.slice().sort(function (a, b) {
+            return pcts[ci][b] - pcts[ci][a];
+          });
+          if (mode === "easy") {
+            return [{ bits: ranked[0], goal: goalFrom(pcts[ci][ranked[0]]) }];
+          }
+          // Hard fallback: up to two targets, but only from mixes
+          // the witness actually makes a real share of.
+          var usable = ranked.filter(function (b) { return pcts[ci][b] >= 8; });
+          if (!usable.length) usable = [ranked[0]];
+          return usable.slice(0, 2).map(function (b) {
+            return { bits: b, goal: goalFrom(pcts[ci][b]) };
+          });
+        });
+      }
+      function solveRound() {
+        var attempts = mode === "easy" ? 200 : 260;
+        for (var a = 0; a < attempts; a++) {
+          var rig = randomWitnessRig();
+          // Search on the half-density samples; a rig that yields
+          // a deal is re-scored at full density and the deal is
+          // only shipped if it verifies there — the percentages
+          // the game itself will compute.
+          var pcts = rigPercents(rig, true);
+          var margin = mode === "easy" ? (a < 100 ? 6 : 3) : (a < 130 ? 4 : 2);
+          var dealt = mode === "easy" ? tryDealEasy(pcts, margin) : tryDealHard(pcts, margin);
+          if (dealt && verifyDeal(dealt, rigPercents(rig))) {
+            solutionRig = rig;
+            return dealt;
+          }
+        }
+        var rigF = randomWitnessRig();
+        var pctsF = rigPercents(rigF);
+        solutionRig = rigF;
+        return fallbackDeal(pctsF);
+      }
+
+      function newRound() {
+        // Deal only rounds the solver has verified against a
+        // witness rig (see solveRound above).
+        var dealt = solveRound();
+        chars.forEach(function (ch, i) {
+          ch.targets = dealt[i].map(function (t) {
+            return { bits: t.bits, goal: t.goal, now: 0 };
+          });
+        });
+        buildGoalRows();
+        lights.forEach(function (L, i) {
+          L.color = ["R", "G", "B"][i % 3];
+          // Start aimed well off the performers so the round isn't pre-solved.
+          var side = Math.random() < 0.5 ? -1 : 1;
+          L.tilt = side * (24 + Math.floor(Math.random() * 28));  // 24–51°
+          L.doorL = 0;
+          L.doorR = 0;
+        });
+        won = false;
+        stopShow();
+        setControlsLocked(false);
+        nextRoundBtn.classList.remove("show");
+        syncSceneDots();
+        update();
+      }
+
+      /* ================= adding / removing lights =================
+         The rig the player built (which slots are occupied) carries
+         over between rounds; only colors and aims reset.          */
+      function addLight(slot) {
+        if (won || lights.length >= SLOTS.length) return;
+        if (lights.some(function (L) { return L.slot === slot; })) return;
+        // Give the new lamp the least-used channel, so extra lights
+        // arrive useful for mixing instead of duplicating a color.
+        var counts = { R: 0, G: 0, B: 0 };
+        lights.forEach(function (L) { counts[L.color]++; });
+        var color = ["R", "G", "B"].sort(function (a, b) { return counts[a] - counts[b]; })[0];
+        lights.push(makeLight(slot, color, 0));
+        lights.sort(function (a, b) { return a.slot - b.slot; });
+        selectedIdx = lights.findIndex(function (L) { return L.slot === slot; });
+        buildSceneCtls();
+        update();
+      }
+      function removeLight(idx) {
+        if (won || lights.length <= 1) return;
+        if (idx < 0 || idx >= lights.length) return;
+        lights.splice(idx, 1);
+        if (selectedIdx >= lights.length) selectedIdx = lights.length - 1;
+        if (dragIdx === idx) endDrag();
+        else if (dragIdx > idx) dragIdx--;
+        hoverHit = null;
+        buildSceneCtls();
+        update();
+      }
+
+      document.getElementById("newRound").addEventListener("click", newRound);
+      document.getElementById("nextRound").addEventListener("click", newRound);
+      var modeEasy = document.getElementById("modeEasy");
+      var modeHard = document.getElementById("modeHard");
+      function setMode(m) {
+        if (mode === m) return;
+        mode = m;
+        modeEasy.setAttribute("aria-pressed", m === "easy" ? "true" : "false");
+        modeHard.setAttribute("aria-pressed", m === "hard" ? "true" : "false");
+        newRound();
+      }
+      modeEasy.addEventListener("click", function () { setMode("easy"); });
+      modeHard.addEventListener("click", function () { setMode("hard"); });
+
+      /* ================= in-scene dragging =================
+         One pointer system for the on-stage controls:
+         - fixture body        -> tilt (aim), by relative pointer motion
+         - barn-door flap knob -> that side's door, by flap angle      */
+      var selectedIdx = 0;
+      var dragIdx = -1;
+      var dragPart = null;      // "tilt" | "flapL" | "flapR"
+      var dragStartX = null;    // pointer x (stage coords) at tilt-drag start
+      var dragStartTilt = null; // fixture tilt at tilt-drag start
+      var hoverHit = null;      // { idx, part } under the pointer, for highlight
+
+      function stagePos(ev) {
+        var r = stage.getBoundingClientRect();
+        return [
+          (ev.clientX - r.left) * (W / r.width),
+          (ev.clientY - r.top) * (H / r.height)
+        ];
+      }
+      function hitTest(p) {
+        var i, seg;
+        // Remove glyph first: the − circle on the truss, directly
+        // above each fixture. It sits on the truss bar, well clear
+        // of the aim circle's 18px grab zone around the pivot
+        // below, and checking it first keeps a removal click from
+        // turning into anything else.
+        if (lights.length > 1) {
+          for (i = 0; i < lights.length; i++) {
+            var rdx = p[0] - lights[i].x, rdy = p[1] - TRUSS_Y;
+            if (rdx * rdx + rdy * rdy < 13 * 13) return { idx: i, part: "remove" };
+          }
+        }
+        // Add glyph: the + circle hanging at each empty truss point.
+        if (lights.length < SLOTS.length) {
+          for (i = 0; i < SLOTS.length; i++) {
+            var taken = lights.some(function (L) { return L.slot === i; });
+            if (taken) continue;
+            var adx = p[0] - SLOTS[i], ady = p[1] - (APEX_Y - 8);
+            if (adx * adx + ady * ady < 16 * 16) return { part: "add", slot: i };
+          }
+        }
+        // Aim control point: the circle in the middle of the
+        // fixture. Generous radius so it is easy to grab (the drawn
+        // circle is 8px; the grab zone is 18px) — it sits on the
+        // pivot, well clear of the flap hinges/tips, so it never
+        // steals a barn-door grab.
+        for (i = 0; i < lights.length; i++) {
+          var cdx = p[0] - lights[i].x, cdy = p[1] - (APEX_Y - 8);
+          if (cdx * cdx + cdy * cdy < 18 * 18) return { idx: i, part: "tilt" };
+        }
+        // Barn-door flaps: ONLY the knob circle at the flap tip and the
+        // flap strip itself start a door drag — not the beam, not the
+        // space around the door. Kept tight on purpose: the flaps hinge
+        // at the lens rim, and a fat hit zone here swallows clicks meant
+        // for the fixture body (aim), which is the zone right beside it.
+        for (i = 0; i < lights.length; i++) {
+          seg = flapSegment(lights[i], -1);
+          if (Math.hypot(p[0] - seg[1][0], p[1] - seg[1][1]) < 15 ||
+              distToSegment(p[0], p[1], seg[0], seg[1]) < 6) return { idx: i, part: "flapL" };
+          seg = flapSegment(lights[i], 1);
+          if (Math.hypot(p[0] - seg[1][0], p[1] - seg[1][1]) < 15 ||
+              distToSegment(p[0], p[1], seg[0], seg[1]) < 6) return { idx: i, part: "flapR" };
+        }
+        // fixture bodies -> tilt (hugs the can + yoke; the old 48px
+        // circle reached well past the fixture into flap territory)
+        for (i = 0; i < lights.length; i++) {
+          var dx = p[0] - lights[i].x, dy = p[1] - (APEX_Y - 8);
+          if (dx * dx + dy * dy < 36 * 36) return { idx: i, part: "tilt" };
+        }
+        return null;
+      }
+      function applyFlapDrag(L, part, p) {
+        // Barn-door flaps: work in fixture-local coords and set the door
+        // from the flap's own fold angle around its hinge.
+        var side = part === "flapL" ? -1 : 1;
+        var t = L.tilt * Math.PI / 180;
+        var dx = p[0] - L.x, dy = p[1] - (APEX_Y - 8);
+        var lx = dx * Math.cos(t) - dy * Math.sin(t);
+        var ly = dx * Math.sin(t) + dy * Math.cos(t);
+        var vx = lx - side * 13, vy = ly - 16;
+        if (vx * vx + vy * vy < 36) return;   // too close to the hinge to read an angle
+        var ang = Math.atan2(-vx, vy);
+        var closedAng = Math.asin(13 / FLAP_LEN);
+        var door = Math.round((ang / side + BASE_HALF) / (closedAng + BASE_HALF) * 100);
+        door = Math.max(0, Math.min(100, door));
+        if (side < 0) L.doorL = door; else L.doorR = door;
+      }
+      function applyDrag(p) {
+        var L = lights[dragIdx];
+        if (dragPart === "tilt") {
+          // Direct relative drag from the centre control point:
+          // tilt = tilt at grab + horizontal pointer travel x gain.
+          // The old orbit-around-the-pivot maths ignored all motion
+          // within 50px of the pivot — and the control point IS the
+          // pivot — so a grab started dead and then lurched, which
+          // is what felt clunky and slow. Horizontal travel has no
+          // dead zone, no snap (it is measured from the grab point,
+          // not the pointer's absolute position), and responds on
+          // the first pixel. 0.45 deg/px sweeps the full +/-68 deg
+          // range in about 300px of travel.
+          if (dragStartX === null) { dragStartX = p[0]; dragStartTilt = L.tilt; }
+          L.tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT,
+            dragStartTilt + (p[0] - dragStartX) * 0.45));
+        } else if (dragPart === "flapL" || dragPart === "flapR") {
+          applyFlapDrag(L, dragPart, p);
+        }
+        update();
+      }
+      function cursorFor(hit) {
+        if (!hit) return "default";
+        if (hit.part === "tilt") return "grab";
+        if (hit.part === "add" || hit.part === "remove") return "pointer";
+        return "ew-resize";
+      }
+      stage.addEventListener("pointerdown", function (ev) {
+        if (won) return;   // rig locked while the show runs
+        var startP = stagePos(ev);
+        var hit = hitTest(startP);
+        if (hit && hit.part === "add") { addLight(hit.slot); return; }
+        if (hit && hit.part === "remove") { removeLight(hit.idx); return; }
+        if (hit) {
+          dragIdx = hit.idx;
+          dragPart = hit.part;
+          dragStartX = startP[0];
+          dragStartTilt = lights[hit.idx].tilt;
+          selectedIdx = hit.idx;
+          syncSceneSelection();
+          stage.classList.add("dragging");
+          stage.setPointerCapture(ev.pointerId);
+          render();
+        } else {
+          // Clicking a beam selects that light (last drawn = topmost feel).
+          var p = stagePos(ev);
+          for (var i = lights.length - 1; i >= 0; i--) {
+            if (pointInBeam(lights[i], p[0], p[1])) {
+              if (selectedIdx !== i) { selectedIdx = i; syncSceneSelection(); render(); }
+              break;
+            }
+          }
+        }
+      });
+      stage.addEventListener("pointermove", function (ev) {
+        if (won) return;   // no hover highlights while the show runs
+        var p = stagePos(ev);
+        if (dragIdx >= 0) { applyDrag(p); return; }
+        var hit = hitTest(p);
+        var changed = JSON.stringify(hit) !== JSON.stringify(hoverHit);
+        hoverHit = hit;
+        stage.style.cursor = cursorFor(hit);
+        if (changed) render();
+      });
+      function endDrag() {
+        dragIdx = -1;
+        dragPart = null;
+        dragStartX = null;
+        dragStartTilt = null;
+        stage.classList.remove("dragging");
+      }
+      stage.addEventListener("pointerup", endDrag);
+      stage.addEventListener("pointercancel", endDrag);
+      stage.addEventListener("pointerleave", function () {
+        if (dragIdx < 0 && hoverHit) { hoverHit = null; render(); }
+      });
+
+      /* ================= go ================= */
+      buildSceneCtls();
+      newRound();
+    </script>
+  </body>
+</html>
