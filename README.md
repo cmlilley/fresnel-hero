@@ -11,7 +11,8 @@ A 2D browser game about stage lighting. Rig the truss, aim the lights, shape the
 - **Barn doors:** drag the circles on the flap tips. A closing door occludes the beam the way a real barn door does — it doesn't just narrow the cone.
 - **Color:** tap a light's color dots to set it red, green, or blue. Beams mix additively where they overlap (red + green = yellow, all three = white). **Shadow** targets count the part of a performer that gets no light at all.
 - **Add / remove lights:** the truss has seven fixed hang points. Tap the + circle on an empty point to hang a light, or the − circle above a fixture to take it down. Only the three lights directly above the band members are hung by default.
-- **Easy:** one target color per performer (primaries, secondaries, white, and shadow). **Hard:** two or three target colors per performer, all to be met at the same time.
+- A slim color mixing key in the header shows the recipes: red + green = yellow, green + blue = cyan, red + blue = magenta, all three = white, shadow = no light.
+- **Easy:** one target color per performer (primaries, secondaries, white, and shadow). **Medium:** exactly two target colors per performer. **Hard:** exactly three target colors per performer — all to be met at the same time.
 - Every round is solver-verified: targets are derived from a real winning rig before they're dealt, so every level can actually be completed.
 
 Win a level and the show starts — the rig locks and the lights fade through a light-show pattern over your setup. The next round is one small button away.

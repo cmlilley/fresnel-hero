@@ -84,6 +84,28 @@
         gap: 10px;
         flex-wrap: wrap;
       }
+      /* Compact color-mixing key on its own slim line in the header:
+         dots with + and =, one short row, wraps on narrow screens. */
+      .mixbar {
+        flex: 1 1 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 3px 14px;
+        font-size: 12px;
+        color: var(--ink-soft);
+      }
+      .mixbar .mix-label { font-weight: 600; color: var(--ink); margin-right: -6px; }
+      .mix-eq { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+      .mix-eq .op { font-weight: 600; color: var(--ink-soft); }
+      .mix-eq .mix-name { font-weight: 600; color: var(--ink); margin-left: 2px; }
+      .mdot {
+        width: 11px; height: 11px;
+        border-radius: 50%;
+        flex: none;
+        border: 1px solid rgba(0,0,0,0.35);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+      }
       .seg {
         display: inline-flex;
         background: var(--panel);
@@ -202,7 +224,7 @@
       .goal-card.met { border-color: var(--good); }
       .goal-card.met .goal-nums .now { color: var(--good); }
       .goal-card.met .bar .fill { background: var(--good); }
-      /* multi-target rows (hard mode deals several colors per performer) */
+      /* multi-target rows (Medium and Hard deal several colors per performer) */
       .goal-rows { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; }
       .trow-head {
         display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
@@ -334,8 +356,6 @@
         line-height: 1.55;
       }
       footer.foot b { color: var(--ink); }
-      .mix-key { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; white-space: nowrap; }
-      .mix-key .swatch { width: 13px; height: 13px; border-radius: 4px; }
 
       @media (max-width: 760px) {
         .goals { grid-template-columns: 1fr; }
@@ -382,9 +402,18 @@
         <div class="top-actions">
           <div class="seg" role="group" aria-label="Difficulty">
             <button id="modeEasy" aria-pressed="true">Easy</button>
+            <button id="modeMedium" aria-pressed="false">Medium</button>
             <button id="modeHard" aria-pressed="false">Hard</button>
           </div>
           <button class="btn" id="newRound">New round</button>
+        </div>
+        <div class="mixbar" aria-label="Color mixing key">
+          <span class="mix-label">Mixing:</span>
+          <span class="mix-eq"><span class="mdot" style="background:#ff3524"></span><span class="op">+</span><span class="mdot" style="background:#25e04f"></span><span class="op">=</span><span class="mdot" style="background:#ffd21f"></span><span class="mix-name">Yellow</span></span>
+          <span class="mix-eq"><span class="mdot" style="background:#25e04f"></span><span class="op">+</span><span class="mdot" style="background:#3d7bff"></span><span class="op">=</span><span class="mdot" style="background:#22d8e6"></span><span class="mix-name">Cyan</span></span>
+          <span class="mix-eq"><span class="mdot" style="background:#ff3524"></span><span class="op">+</span><span class="mdot" style="background:#3d7bff"></span><span class="op">=</span><span class="mdot" style="background:#ff35d1"></span><span class="mix-name">Magenta</span></span>
+          <span class="mix-eq"><span class="mdot" style="background:#ff3524"></span><span class="op">+</span><span class="mdot" style="background:#25e04f"></span><span class="op">+</span><span class="mdot" style="background:#3d7bff"></span><span class="op">=</span><span class="mdot" style="background:#f4f4f4"></span><span class="mix-name">White</span></span>
+          <span class="mix-eq"><span class="mdot" style="background:#151515"></span><span class="mix-name">Shadow</span><span>= no light</span></span>
         </div>
       </header>
 
@@ -398,16 +427,7 @@
       </div>
 
       <footer class="foot">
-        <b>Color mixing key:</b>
-        <span class="mix-key"><span class="swatch" style="background:#ff3524"></span>Red</span>
-        <span class="mix-key"><span class="swatch" style="background:#25e04f"></span>Green</span>
-        <span class="mix-key"><span class="swatch" style="background:#3d7bff"></span>Blue</span>
-        <span class="mix-key"><span class="swatch" style="background:#ffd21f"></span>Red+Green = Yellow</span>
-        <span class="mix-key"><span class="swatch" style="background:#ff35d1"></span>Red+Blue = Magenta</span>
-        <span class="mix-key"><span class="swatch" style="background:#22d8e6"></span>Green+Blue = Cyan</span>
-        <span class="mix-key"><span class="swatch" style="background:#f4f4f4"></span>All three = White</span>
-        <span class="mix-key"><span class="swatch" style="background:#151515"></span>No light at all = Shadow</span>
-        <br />Tip: barn doors stop at the center of the beam, so closing both narrows a lamp to a sliver but never kills it outright — handy for keeping a color off a performer who doesn't need it.
+        Tip: barn doors stop at the center of the beam, so closing both narrows a lamp to a sliver but never kills it outright — handy for keeping a color off a performer who doesn't need it.
       </footer>
     </div>
 
@@ -452,9 +472,10 @@
         6: { name: "Cyan",    css: "#22d8e6" },
         7: { name: "White",   css: "#f4f4f4" }
       };
-      // Easy is the old Hard pool: one target per performer, drawn
-      // from primaries, secondaries, and white. Hard uses the same
-      // pool but deals several targets per performer.
+      // Easy deals one target per performer, drawn from primaries,
+      // secondaries, and white. Medium and Hard use the same pool
+      // but deal several targets per performer — exactly two on
+      // Medium, exactly three on Hard.
       // Target pool: every lit mix plus 0 — Shadow, the share of a
       // silhouette no beam touches at all. Unlit pixels are a real,
       // scoreable class (score() counts them as mix 0), so Shadow
@@ -579,8 +600,8 @@
 
       /* ================= state ================= */
       // Each performer carries a list of targets: { bits, goal, now }.
-      // Easy deals exactly one; Hard deals two or three, and every
-      // sub-target has to be met to win.
+      // Easy deals exactly one, Medium exactly two, Hard exactly
+      // three, and every sub-target has to be met to win.
       var chars = [
         { name: "Singer",    x: 118, build: buildSinger,    targets: [{ bits: 1, goal: 65, now: 0 }], samples: [], path: null },
         { name: "Guitarist", x: 405, build: buildGuitarist, targets: [{ bits: 2, goal: 65, now: 0 }], samples: [], path: null },
@@ -1167,8 +1188,8 @@
         };
       });
 
-      // Rebuild the target rows when a round is dealt (Hard deals a
-      // different number of targets per performer than Easy).
+      // Rebuild the target rows when a round is dealt (Medium and
+      // Hard deal a different number of targets per performer than Easy).
       function buildGoalRows() {
         chars.forEach(function (ch, i) {
           var ui = goalCards[i];
@@ -1391,7 +1412,7 @@
       function targetRanges(bits) {
         // Shadow deals lower than any lit color: with seven wide
         // beams on the truss, keeping even half of a performer
-        // completely untouched is genuinely hard, and in Hard sets
+        // completely untouched is genuinely hard, and in multi-target sets
         // a Shadow goal also competes with the lit goals sharing
         // the same silhouette.
         if (bits === 0) return [20, 25, 30, 35, 40];
@@ -1400,17 +1421,29 @@
         if (n === 2) return [50, 55, 60];        // secondaries: 50–60
         return [55, 60, 65, 70];                 // primaries: 55–70
       }
-      // Hard sub-goal sets: several colors per performer, sized so
-      // the set stays reachable — the sub-targets are disjoint pixel
-      // shares, so their goals must sum to well under 100%. The
-      // three-target set mirrors the requested shape (30 / 30 / 20).
-      var HARD_SETS = [
+      // Multi-target sub-goal sets: several colors per performer,
+      // sized so the set stays reachable — the sub-targets are
+      // disjoint pixel shares, so their goals must sum to well
+      // under 100%. Medium deals exactly two targets per performer;
+      // Hard deals exactly three, mirroring the requested shape
+      // (30 / 30 / 20).
+      var MEDIUM_SETS = [
         [30, 30],
         [35, 30],
         [30, 25],
+        [35, 25]
+      ];
+      var HARD_SETS = [
         [30, 30, 20],
         [30, 25, 20],
-        [25, 25, 20]
+        [25, 25, 20],
+        [35, 25, 15],
+        [30, 20, 20],
+        [25, 20, 15],
+        [20, 20, 20],
+        [20, 15, 15],
+        [20, 15, 10],
+        [15, 15, 10]
       ];
 
       /* ================= round solver =================
@@ -1472,7 +1505,12 @@
       // with jitter and mostly-open doors for partition variety.
       function randomWitnessRig() {
         var channels = shuffle(["R", "G", "B", "R", "G", "B", "R"].slice(0, SLOTS.length));
-        var grouped = Math.random() < 0.6;
+        // Multi-target modes need partitioned witnesses: grouped
+        // aim and partly-closed doors far more often, so each
+        // performer ends up with two or three substantial distinct
+        // mixes instead of one dominant wash.
+        var multi = mode !== "easy";
+        var grouped = Math.random() < (multi ? 0.85 : 0.6);
         var groups = [[0, 1], [2, 3, 4], [5, 6]];
         // Witness styles, so the solver can prove Shadow rounds
         // too: some rigs spare one performer entirely (no lamp
@@ -1489,6 +1527,9 @@
             return Math.random() < 0.8
               ? [40, 55, 70, 85, 100][Math.floor(Math.random() * 5)]
               : Math.floor(Math.random() * 26);
+          }
+          if (multi) {
+            return Math.random() < 0.4 ? 0 : [25, 50, 50, 75, 75, 100][Math.floor(Math.random() * 6)];
           }
           return Math.random() < 0.72 ? 0 : [25, 50, 75, 100][Math.floor(Math.random() * 4)];
         }
@@ -1511,7 +1552,7 @@
         // silhouette (rotated per rig) instead of all piling onto
         // its center. Center-piled beams make one dominant overlap
         // mix per performer — White nearly every time, and never
-        // the two or three substantial zones Hard sets need.
+        // the two or three substantial zones Medium and Hard sets need.
         // Partitioned aim leaves pure-color flanks and secondary
         // overlap bands, so primaries, secondaries, and Shadow
         // slices all reach dealable shares.
@@ -1573,14 +1614,15 @@
         }
         return out;
       }
-      // Hard deal from a witness: a goal set per performer, colors
+      // Multi-target deal from a witness (Medium: two targets per
+      // performer, Hard: three): a goal set per performer, colors
       // best-fitted to the percentages the witness actually makes
       // (largest goal gets the smallest percentage that clears it,
       // leaving the big mixes for the other sub-targets).
-      function tryDealHard(pcts, margin) {
+      function tryDealMulti(pcts, margin, goalSets) {
         var out = [];
         for (var ci = 0; ci < chars.length; ci++) {
-          var sets = shuffle(HARD_SETS.slice());
+          var sets = shuffle(goalSets.slice());
           var found = null;
           for (var s = 0; s < sets.length && !found; s++) {
             var goals = sets[s].slice().sort(function (a, b) { return b - a; });
@@ -1629,17 +1671,37 @@
           if (mode === "easy") {
             return [{ bits: ranked[0], goal: goalFrom(pcts[ci][ranked[0]]) }];
           }
-          // Hard fallback: up to two targets, but only from mixes
-          // the witness actually makes a real share of.
-          var usable = ranked.filter(function (b) { return pcts[ci][b] >= 8; });
-          if (!usable.length) usable = [ranked[0]];
-          return usable.slice(0, 2).map(function (b) {
-            return { bits: b, goal: goalFrom(pcts[ci][b]) };
+          // Multi-target fallback: exactly two targets on Medium,
+          // exactly three on Hard — drawn from mixes the witness
+          // actually makes a real share of, topped up from the
+          // ranked list if fewer clear that bar.
+          var want = mode === "medium" ? 2 : 3;
+          var usable = ranked.filter(function (b) { return pcts[ci][b] >= 10; });
+          var chosen = usable.slice(0, want);
+          for (var ri = 0; ri < ranked.length && chosen.length < want; ri++) {
+            if (pcts[ci][ranked[ri]] >= 5 && chosen.indexOf(ranked[ri]) < 0) chosen.push(ranked[ri]);
+          }
+          for (var rj = 0; rj < ranked.length && chosen.length < want; rj++) {
+            if (chosen.indexOf(ranked[rj]) < 0) chosen.push(ranked[rj]);
+          }
+          // Scale the goals to a playable band instead of reading
+          // them straight off the witness: a dominant mix the
+          // witness makes at 95% would otherwise deal a ~90% goal
+          // next to ~1% trace goals. Every goal stays under what
+          // the witness achieves for that mix, so the set is still
+          // jointly winnable by construction.
+          return chosen.map(function (b) {
+            var pct = pcts[ci][b];
+            var g = Math.floor(pct * 0.7);
+            if (g > 35) g = 35;
+            if (g < 5) g = 5;
+            if (g > pct - 1) g = Math.max(1, Math.floor(pct));
+            return { bits: b, goal: g };
           });
         });
       }
       function solveRound() {
-        var attempts = mode === "easy" ? 200 : 260;
+        var attempts = mode === "easy" ? 200 : (mode === "medium" ? 260 : 700);
         for (var a = 0; a < attempts; a++) {
           var rig = randomWitnessRig();
           // Search on the half-density samples; a rig that yields
@@ -1647,17 +1709,34 @@
           // only shipped if it verifies there — the percentages
           // the game itself will compute.
           var pcts = rigPercents(rig, true);
-          var margin = mode === "easy" ? (a < 100 ? 6 : 3) : (a < 130 ? 4 : 2);
-          var dealt = mode === "easy" ? tryDealEasy(pcts, margin) : tryDealHard(pcts, margin);
+          var margin = mode === "easy" ? (a < 100 ? 6 : 3)
+            : mode === "medium" ? (a < 130 ? 4 : 2)
+            : (a < 200 ? 4 : (a < 450 ? 2 : 1));
+          var dealt = mode === "easy" ? tryDealEasy(pcts, margin)
+            : tryDealMulti(pcts, margin, mode === "medium" ? MEDIUM_SETS : HARD_SETS);
           if (dealt && verifyDeal(dealt, rigPercents(rig))) {
             solutionRig = rig;
             return dealt;
           }
         }
-        var rigF = randomWitnessRig();
-        var pctsF = rigPercents(rigF);
-        solutionRig = rigF;
-        return fallbackDeal(pctsF);
+        // Fallback: sample several witnesses and keep the deal
+        // whose weakest target mix is strongest, so even a
+        // fallback round deals substantial targets rather than
+        // trace-percentage goals on whichever rig came up first.
+        var bestRig = null, bestDeal = null, bestScore = -1;
+        for (var f = 0; f < 60; f++) {
+          var rigF = randomWitnessRig();
+          var pctsF = rigPercents(rigF);
+          var dealF = fallbackDeal(pctsF);
+          var sc = Infinity;
+          dealF.forEach(function (list, ci) {
+            list.forEach(function (t) { sc = Math.min(sc, pctsF[ci][t.bits]); });
+          });
+          if (sc > bestScore) { bestScore = sc; bestRig = rigF; bestDeal = dealF; }
+          if (bestScore >= 12) break;
+        }
+        solutionRig = bestRig;
+        return bestDeal;
       }
 
       function newRound() {
@@ -1718,15 +1797,18 @@
       document.getElementById("newRound").addEventListener("click", newRound);
       document.getElementById("nextRound").addEventListener("click", newRound);
       var modeEasy = document.getElementById("modeEasy");
+      var modeMedium = document.getElementById("modeMedium");
       var modeHard = document.getElementById("modeHard");
       function setMode(m) {
         if (mode === m) return;
         mode = m;
         modeEasy.setAttribute("aria-pressed", m === "easy" ? "true" : "false");
+        modeMedium.setAttribute("aria-pressed", m === "medium" ? "true" : "false");
         modeHard.setAttribute("aria-pressed", m === "hard" ? "true" : "false");
         newRound();
       }
       modeEasy.addEventListener("click", function () { setMode("easy"); });
+      modeMedium.addEventListener("click", function () { setMode("medium"); });
       modeHard.addEventListener("click", function () { setMode("hard"); });
 
       /* ================= in-scene dragging =================
