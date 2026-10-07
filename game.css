@@ -78,7 +78,7 @@
         margin-left: auto;
       }
       /* The color-mixing key no longer lives in the scene: the
-         top row carries only a "Help" button (with the title /
+         top row carries only a "Color Guide" button (with the title /
          difficulty group), which opens the modal cheat sheet
          below. Once a player has the hang of mixing they never
          have to look at it again. Only the four real mixes are
@@ -362,7 +362,7 @@
       .scene-ui {
         position: absolute;
         /* The color pills get their own dedicated row INSIDE the
-           scene: below the top row (title / Help / difficulty /
+           scene: below the top row (title / Color Guide / difficulty /
            New round) and above the truss. The truss and fixtures
            were shifted down in the canvas (TRUSS_Y / APEX_Y) to
            clear this band, so the pills sit in open space above
@@ -478,9 +478,9 @@
            tighter controls on one line. */
         .scene-title { font-size: 16px; padding: 5px 10px 6px; letter-spacing: 0.02em; }
         .scene-toprow { gap: 6px 8px; }
-        .top-actions { gap: 6px; }
-        .seg button { padding: 4px 8px; font-size: 10.5px; }
-        .btn { padding: 6px 10px; font-size: 11.5px; }
+        .top-actions { gap: 5px; }
+        .seg button { padding: 4px 6px; font-size: 10.5px; }
+        .btn { padding: 6px 8px; font-size: 11.5px; }
         .mix-eq { gap: 2px; }
         .mix-list .mix-eq { gap: 4px; }
         .scene-dot { width: 15px; height: 15px; }
@@ -695,7 +695,7 @@
       /* ---------- portrait auto-rotate (touch devices) ----------
          On a coarse-pointer device held in portrait, the whole
          game — stage canvas, top row, selector pills, goal pills,
-         Help modal, light modal; everything lives inside .wrap —
+         Color Guide modal, light modal; everything lives inside .wrap —
          turns 90° clockwise as ONE rigid unit, so the wide stage
          fills the phone's long axis. No prompt, no extra copy: it
          just does it. The trigger reads the layout viewport
