@@ -791,4 +791,73 @@
         transform: translateX(-50%);
       }
 
+      /* ---------- landscape fit (touch devices) ----------
+         Portrait gets the rotation above; landscape touch
+         devices get the matching fit WITHOUT rotation. The
+         plain width-fit layout scales the 960×600 stage to
+         the viewport's width, which on a landscape phone
+         (932×430, 844×390) makes the stage plus chrome TALLER
+         than the viewport — the game overflowed vertically
+         and sat wrong after turning the phone sideways (any
+         inline fit state left over from the rotated fit made
+         it worse). So while a coarse-pointer device is in
+         landscape, the wrap becomes a fixed full-viewport box
+         with the page locked against scrolling, and
+         fitFrame() uniformly scales the whole frame by
+         min(viewportW / frameW, viewportH / frameH) —
+         fit-within, centred by the wrap's flex centring plus
+         the frame's centre transform-origin — exactly the
+         rotated fit's approach, minus the 90° turn. Fine-
+         pointer (desktop / mouse) rendering never matches
+         this block, at any window size, and landscape desktop
+         windows are untouched. */
+      @media (orientation: landscape) and (pointer: coarse) {
+        html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+        .wrap {
+          position: fixed;
+          width: 100vw; width: 100dvw;
+          height: 100vh; height: 100dvh;
+          left: 0;
+          top: 0;
+          max-width: none;
+          margin: 0;
+          padding: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .stage-frame { width: 100%; flex: none; transform-origin: center center; }
+      }
+
+      /* JS-driven mirror of the landscape fit block above,
+         for the same reason as .fh-rotated: where the
+         (pointer: coarse) media feature fails to match on a
+         touch handset (Chrome on iOS / WebKit), the script
+         evaluates landscape + touch from portable signals and
+         toggles .fh-landfit on <html> (see syncLandClass).
+         The rules are declaration-for-declaration identical
+         to the media-query block, so whichever path fires the
+         painted result is the same, and when neither matches
+         (portrait, or a fine-pointer context) the class is
+         absent and the default layout is untouched. The JS
+         signal is additionally guarded to phone-like short
+         sides (see jsLandMatches) so a touch-capable laptop
+         in its normal landscape orientation can never trip
+         it — desktop landscape stays exactly as it was. */
+      html.fh-landfit, html.fh-landfit body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+      html.fh-landfit .wrap {
+        position: fixed;
+        width: 100vw; width: 100dvw;
+        height: 100vh; height: 100dvh;
+        left: 0;
+        top: 0;
+        max-width: none;
+        margin: 0;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      html.fh-landfit .stage-frame { width: 100%; flex: none; transform-origin: center center; }
+
     

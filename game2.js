@@ -818,6 +818,8 @@
          hit-tests them natively.                        */
       var ROTATE_MQ = window.matchMedia
         ? window.matchMedia("(orientation: portrait) and (pointer: coarse)") : null;
+      var LAND_MQ = window.matchMedia
+        ? window.matchMedia("(orientation: landscape) and (pointer: coarse)") : null;
       /* The same condition evaluated from portable signals, for
          engines whose media features don't fire — Chrome on iOS
          is WebKit, where (pointer: coarse) can fail to match on
@@ -840,6 +842,37 @@
       function isRotated() {
         return !!((ROTATE_MQ && ROTATE_MQ.matches) ||
           document.documentElement.classList.contains("fh-rotated"));
+      }
+      /* Landscape fit state, the un-rotated sibling of the
+         rotation above: true when EITHER the CSS trigger
+         (LAND_MQ) or the JS trigger (.fh-landfit) is active.
+         The JS signal mirrors jsRotateMatches — touch from
+         maxTouchPoints / ontouchstart, landscape from the
+         window's own dimensions — with one extra guard the
+         portrait path never needed: the short side must be
+         phone-like (<= 520 CSS px). Landscape is a desktop's
+         home orientation, so an unguarded touch check would
+         fit-shrink touch-capable laptops; phones in landscape
+         have a short side of ~430px or less, and larger coarse
+         devices (tablets) are already covered by LAND_MQ
+         itself, whose (pointer: coarse) test a fine-primary
+         laptop never passes. */
+      function jsLandMatches() {
+        var touch = (navigator.maxTouchPoints > 0) || ("ontouchstart" in window);
+        return touch && window.innerWidth > window.innerHeight &&
+          Math.min(window.innerWidth, window.innerHeight) <= 520;
+      }
+      function syncLandClass() {
+        document.documentElement.classList.toggle("fh-landfit", jsLandMatches());
+      }
+      function isLandFit() {
+        return !!((LAND_MQ && LAND_MQ.matches) ||
+          document.documentElement.classList.contains("fh-landfit"));
+      }
+      // Either fitted presentation (rotated portrait, or
+      // landscape fit) is active.
+      function isFitted() {
+        return isRotated() || isLandFit();
       }
 
       var wrapEl = document.querySelector(".wrap");
@@ -891,15 +924,62 @@
           else sceneCtls[i].style.setProperty("left", pct);
         }
       }
-      function fitRotatedFrame() {
+      // One fit for both fitted presentations. Rotated
+      // portrait and coarse landscape share everything except
+      // the wrap's own geometry (swapped + rotated vs plain
+      // full-viewport), which the stylesheet owns; here the
+      // frame is measured at its full logical width — the
+      // wrap's content width — and uniformly scaled by
+      // min(availW / frameW, availH / frameH) so stage plus
+      // chrome fit BOTH axes of whichever box is active,
+      // centred by the wrap's flex centring and the frame's
+      // centre transform-origin. In landscape on a phone that
+      // ratio is height-limited (the 960×600 stage at full
+      // width would stand taller than the ~390–430px-tall
+      // viewport), so the frame ends up height-filling with
+      // side margins — the physical max for the stage's
+      // aspect — and the page, locked by the stylesheet while
+      // fitted, cannot scroll or overflow.
+      // CLEAR PATH (the stale-state fix): the fit sets exactly
+      // three pieces of inline state — the frame's width, the
+      // frame's transform, and (rotated only) the pills' left
+      // priority via setPillLeftPriority — and the not-fitted
+      // branch below resets ALL THREE, unconditionally, on
+      // every call. The remaining fit state is stylesheet-only
+      // and keyed to the triggers themselves (the two media
+      // queries and the .fh-rotated / .fh-landfit classes,
+      // re-evaluated by refreshRotation on every resize /
+      // orientation / trigger change before this runs), so
+      // when the device turns and neither trigger matches, no
+      // transform, explicit width, pill override, or overflow
+      // lock can survive into the plain layout — from either
+      // the CSS path or the JS path.
+      // Pointer maths under the landscape scale needs no new
+      // code: stagePos / displayScale / lmPos all derive from
+      // live getBoundingClientRect values, which already
+      // include the uniform scale (in the un-rotated branch
+      // the rect's width IS the scaled stage width), so gains
+      // and hit radii track exactly as they do unscaled and in
+      // rotated mode. Only the modal panel drag, which works
+      // in layout pixels, divides the scale back out (see its
+      // landscape branch below).
+      function fitFrame() {
         if (!wrapEl || !stageFrameEl) return;
-        if (!isRotated()) {
+        if (!isFitted()) {
           stageFrameEl.style.width = "";
           stageFrameEl.style.transform = "";
           setPillLeftPriority(false);
+          clampModalToScene();
           return;
         }
-        setPillLeftPriority(true);
+        // Pills keep their fixture columns only while rotated
+        // (the portrait phone-width reflow is what the override
+        // exists to defeat). In landscape the viewport width
+        // IS the frame's logical width, so the stylesheet's
+        // own pill layout is already correct; hand the plain
+        // inline value back so a rotated session's important
+        // override never leaks into landscape.
+        setPillLeftPriority(isRotated());
         var cs = window.getComputedStyle(wrapEl);
         var availW = wrapEl.clientWidth -
           parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -925,6 +1005,9 @@
         }
         clampModalToScene();
       }
+      // Historical name, kept as the single entry point the
+      // scheme switch and the wiring below already call.
+      function fitRotatedFrame() { fitFrame(); }
 
       /* ================= in-scene dragging =================
          One pointer system for the on-stage controls:
@@ -1705,6 +1788,21 @@
             lmPanelDrag.startLeft + dy / k,
             lmPanelDrag.startTop - dx / k
           );
+        } else if (isLandFit()) {
+          // Un-rotated, but the landscape fit may have shrunk
+          // the frame: the panel's left/top live in layout
+          // pixels while the finger moves in screen pixels, so
+          // divide out the modal's on-screen scale — its rect
+          // width (which includes the frame's uniform scale)
+          // over its layout width — and the panel tracks the
+          // finger exactly, as in the rotated branch.
+          var mr2 = lightModal.getBoundingClientRect();
+          var k2 = mr2.width > 0 && lightModal.clientWidth > 0
+            ? mr2.width / lightModal.clientWidth : 1;
+          positionModalCard(
+            lmPanelDrag.startLeft + dx / k2,
+            lmPanelDrag.startTop + dy / k2
+          );
         } else {
           positionModalCard(
             lmPanelDrag.startLeft + dx,
@@ -1848,25 +1946,37 @@
       lmCanvas.addEventListener("pointerup", lmEndDrag);
       lmCanvas.addEventListener("pointercancel", lmEndDrag);
 
-      /* ================= portrait rotation: fit wiring =================
-         Recompute the rotated state whenever the viewport or
-         either trigger changes: refreshRotation re-evaluates
-         the JS trigger (syncRotateClass) and then refits, on
-         the same events for both paths — resize,
-         orientationchange, the media query's own change event,
-         and once at load below. Media queries read the layout
-         viewport and the JS path reads window dimensions, so
-         these events — never the transform — drive the state,
-         and rotating back restores the untouched desktop /
-         landscape layout (the class drops, the media query
-         stops matching, and fitRotatedFrame clears the inline
-         width when neither path is active).                  */
-      function refreshRotation() { syncRotateClass(); fitRotatedFrame(); }
+      /* ================= rotation + landscape fit: wiring =================
+         Recompute the fitted state whenever the viewport or
+         any trigger changes: refreshRotation re-evaluates BOTH
+         JS triggers (syncRotateClass, syncLandClass) and then
+         refits, on the same events for every path — resize,
+         orientationchange, both media queries' own change
+         events, and once at load below. Media queries read the
+         layout viewport and the JS paths read window
+         dimensions, so these events — never the transform —
+         drive the state. Turning the device therefore settles
+         deterministically in both directions: portrait ->
+         landscape drops .fh-rotated (and the portrait media
+         query), raises the landscape state, and fitFrame
+         re-measures and re-scales for the landscape box;
+         landscape -> portrait does the reverse; and a state
+         with neither trigger active runs fitFrame's clear
+         path, which resets every inline style the fit ever
+         set (frame width, frame transform, pill left
+         priority) while the stylesheet locks keyed to the
+         triggers fall away with them — no leftover scale or
+         offset can persist past the turn.                  */
+      function refreshRotation() { syncRotateClass(); syncLandClass(); fitFrame(); }
       window.addEventListener("resize", refreshRotation);
       window.addEventListener("orientationchange", refreshRotation);
       if (ROTATE_MQ) {
         if (ROTATE_MQ.addEventListener) ROTATE_MQ.addEventListener("change", refreshRotation);
         else if (ROTATE_MQ.addListener) ROTATE_MQ.addListener(refreshRotation);
+      }
+      if (LAND_MQ) {
+        if (LAND_MQ.addEventListener) LAND_MQ.addEventListener("change", refreshRotation);
+        else if (LAND_MQ.addListener) LAND_MQ.addListener(refreshRotation);
       }
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(refreshRotation);
 
