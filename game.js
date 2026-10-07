@@ -215,6 +215,62 @@
         }
         return changed;
       }
+      // Vertical anchor for a goal pill: its CENTRE sits at the
+      // centre of the floor band — halfway between the floor
+      // line (FLOOR_Y, where the performers stand) and the scene
+      // bottom (H) — both read live from the same layout globals
+      // applyLayout / applySchemeChrome maintain, so scheme
+      // switches, fluid re-layouts, and orientation flips all
+      // re-centre the pills with no stale offset. (A fixed
+      // bottom offset cannot do this: the pill's CSS height is
+      // constant while the displayed stage height changes with
+      // the fluid width, so a bottom-anchored pill creeps up
+      // over the performers' feet.) Measurements are in the
+      // .goals overlay's layout pixels (offset* ignores the
+      // fitted states' transforms), with the canvas's offset
+      // inside the overlay accounted for — on narrow screens
+      // the overlay also spans the in-flow selector row above
+      // the canvas. The pill is centred via top + the CSS
+      // translate(-50%, -50%), so its shadow and .met outline
+      // ride along automatically. Clamp: when the pill fits
+      // the band, its centre is clamped so it never crosses
+      // the floor line or the scene bottom; when the band is
+      // shorter than the pill, the pill sits as low as fits —
+      // bottom flush with the scene bottom, still fully
+      // inside the scene.
+      function positionGoalPill(card) {
+        var fallbackTop = (((FLOOR_Y + H) / 2) / H * 100) + "%";
+        if (typeof stage === "undefined" || !stage ||
+            typeof goalsEl === "undefined" || !goalsEl) {
+          card.style.top = fallbackTop;
+          card.style.bottom = "auto";
+          return;
+        }
+        var boxH = goalsEl.clientHeight;
+        var cvsH = stage.offsetHeight;
+        var pillH = card.offsetHeight;
+        if (!(boxH > 0) || !(cvsH > 0) || !(pillH > 0)) {
+          card.style.top = fallbackTop;
+          card.style.bottom = "auto";
+          return;
+        }
+        var cvsTop = stage.offsetTop - goalsEl.offsetTop;
+        var bandTop = cvsTop + (FLOOR_Y / H) * cvsH;
+        var bandBottom = cvsTop + cvsH;
+        var center = (bandTop + bandBottom) / 2;
+        if (pillH <= bandBottom - bandTop) {
+          center = Math.max(bandTop + pillH / 2,
+            Math.min(bandBottom - pillH / 2, center));
+        } else {
+          center = bandBottom - pillH / 2;
+          if (center - pillH / 2 < cvsTop) center = cvsTop + pillH / 2;
+        }
+        if (boxH >= pillH) {
+          center = Math.max(pillH / 2, Math.min(boxH - pillH / 2, center));
+        }
+        card.style.top = center + "px";
+        card.style.bottom = "auto";
+      }
       // DOM positions baked from stage percentages (goal pills
       // under their performers, selector pills over their
       // fixtures) follow the layout.
@@ -222,6 +278,7 @@
         if (typeof goalCards !== "undefined" && typeof chars !== "undefined") {
           goalCards.forEach(function (ui, i) {
             if (chars[i]) ui.card.style.left = ((chars[i].x + CHAR_W / 2) / W * 100) + "%";
+            positionGoalPill(ui.card);
           });
         }
         if (typeof sceneCtls !== "undefined" && typeof lights !== "undefined") {
@@ -1026,20 +1083,65 @@
         ctx.restore();
       }
 
+      /* ---- Mobile tap rings: a permanent affordance in the Mobile
+              scheme only — the NON-SELECTED state of the dashed gold
+              selection ring. Every fixture head — powered or not,
+              since every fixture is tappable — carries the same
+              dashed gold ring drawSceneControls paints on the
+              selected fixture (same hue rgb(255,217,138), same
+              [5,4] dash), but at a clearly dimmer alpha (0.35 vs
+              the selected 0.9) and a touch thinner (1.5 vs 2), so
+              one visual language reads at a glance: dim dashed =
+              tappable, bright dashed = selected. The dim ring is
+              drawn at the small fixture-hugging radius (27, the
+              radius the bright selection ring used originally);
+              selecting a fixture grows its ring to the fixture's
+              ACTUAL tap radius (mobileTapRadius, painted by
+              drawSceneControls), so selection reads as the ring
+              expanding, not shrinking. The selected fixture
+              (modalIdx) is skipped here: it shows only its bright
+              ring, painted by drawSceneControls. Purely visual: canvas strokes
+              never intercept input, and nothing here touches
+              hit-testing or dragging. Drawn in scene coordinates
+              from render(), just before the fixtures, so it follows
+              every layout (fluid, fixed, rotated, fallback) with
+              no extra maths and the fixture drawing paints over
+              it where the barn doors cross it — the ring never
+              covers the lens or the doors. Static — no animation. */
+      function drawTapRings() {
+        if (controlScheme !== "mobile") return;
+        var r = 27;
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = "rgba(255,217,138,0.35)";
+        ctx.lineWidth = 1.5;
+        lights.forEach(function (L, i) {
+          if (i === modalIdx) return;   // selected: bright ring only
+          ctx.beginPath();
+          ctx.arc(L.x, APEX_Y - 8, r, 0, 6.2832);
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
       /* ---- on-stage controls: tilt arc + barn-door flap knobs. The
               beam itself carries no handles — doors are worked only
               from the knobs on the flap tips. ---- */
       function drawSceneControls() {
         // Mobile scheme: the scene stays clean — no aim circles,
-        // no barn-door knobs. The only canvas affordance is a
-        // subtle highlight ring on the fixture the open modal is
-        // controlling, so the eye can tie the modal to its light.
+        // no barn-door knobs. The canvas affordances are the
+        // dashed gold rings in two states: the dim non-selected
+        // ring on every fixture (drawTapRings, painted behind the
+        // fixtures) and this bright selected-state ring — drawn at
+        // the fixture's tap radius (mobileTapRadius), so it grows
+        // from the small dim ring — on the fixture the open modal
+        // is controlling, so the eye can tie the modal to its light.
         if (controlScheme === "mobile") {
           if (modalIdx >= 0 && lights[modalIdx]) {
             var mL = lights[modalIdx];
             ctx.save();
             ctx.beginPath();
-            ctx.arc(mL.x, APEX_Y - 8, 27, 0, 6.2832);
+            ctx.arc(mL.x, APEX_Y - 8, mobileTapRadius(), 0, 6.2832);
             ctx.strokeStyle = "rgba(255, 217, 138, 0.9)";
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 4]);
@@ -1203,6 +1305,7 @@
         ctx.fillRect(30, TRUSS_Y + 7, W - 60, 4);
         ctx.fillStyle = "#2c2c34";
         for (var t = 40; t < W - 40; t += 26) ctx.fillRect(t, TRUSS_Y - 9, 3, 20);
+        drawTapRings();
         lights.forEach(drawFixture);
         drawSceneControls();
         // The zoomed modal fixture mirrors the live light 1:1 —

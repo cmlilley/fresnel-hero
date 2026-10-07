@@ -1390,6 +1390,13 @@
         // live, so tap mapping and modal docking follow the new
         // height automatically.
         rebuildFlatSamples();
+        // applyLayout positioned the goal pills BEFORE the
+        // canvas resize above (a scheme switch can change H
+        // without changing W, in which case applyLayout does
+        // not resize the canvas itself): re-centre them against
+        // the final canvas height so no pre-resize measurement
+        // survives into the new scheme.
+        syncLayoutPositions();
       }
       function setScheme(s) {
         if (s !== "mobile" && s !== "computer") return;
@@ -1398,6 +1405,10 @@
         closeLightModal();
         applySchemeChrome();
         fitRotatedFrame();   // the scene height changed with the scheme
+        // The fit may have re-sized the frame (hence the canvas)
+        // after applySchemeChrome's own positioning pass:
+        // re-centre the goal pills against the fitted size.
+        syncLayoutPositions();
         render();
       }
       schemeComputerBtn.addEventListener("click", function () { setScheme("computer"); });
@@ -1682,20 +1693,77 @@
               drag the panel anywhere (see the header-drag code
               below), clamped so it always stays fully inside
               the scene. Reopening — for any light — re-docks. */
+      /* ---- proportional panel size (touch layouts) ----
+         The panel's layout size stays 224px everywhere, but in
+         the touch layouts (a fitted state — rotated portrait or
+         landscape fit — or any coarse-pointer context) the card
+         is transform-scaled so its ON-SCREEN width holds the
+         approved fixed-design proportion: 224px against the
+         960-wide scene, ≈23% of the scene's on-screen width,
+         in fluid, fit-fallback, and rotated states alike. The
+         scale derives from live rects: the stage canvas's
+         on-screen width (its rect's long dimension when
+         rotated) already includes the frame's fit scale, and
+         the panel shares that frame, so dividing the target
+         on-screen width by the panel's current on-screen width
+         (layout width × screen-px-per-layout-px) gives the
+         extra scale to apply. Scaling the whole card scales
+         the fixture canvas with it — the canvas's internal
+         drawing (LM_W × LM_H at LM_SCALE, fitted so the
+         fixture and its controls stay inside at every tilt
+         and door position) is untouched, so the fixture and
+         its beam preview stay contained exactly as at full
+         size, and every rect-based pointer conversion inside
+         the modal (lmPos, the panel drag) reads the scaled
+         rects live and stays correct. The scale is floored at
+         0.6 so the controls' 48px tap areas never drop below
+         ~29 layout-scaled px — no smaller than they
+         effectively were under the old fit build's uniform
+         shrink — and capped at 1: on desktop / fine-pointer
+         the scale is exactly 1 and the panel keeps today's
+         224px presentation. Docking and clamping below work
+         in the SCALED size (scaledCardSize), so the painted
+         panel is what stays inside the scene. */
+      var COARSE_MQ = window.matchMedia
+        ? window.matchMedia("(pointer: coarse)") : null;
+      var lmScale = 1;   // extra scale currently applied to the panel
+      function modalScale() {
+        if (!isFitted() && !(COARSE_MQ && COARSE_MQ.matches)) return 1;
+        var r = stage.getBoundingClientRect();
+        var stageScreen = isRotated() ? r.height : r.width;
+        var layoutW = stage.offsetWidth || lightModal.clientWidth;
+        var cardW = lightModalCard.offsetWidth;
+        if (!(stageScreen > 0) || !(layoutW > 0) || !(cardW > 0)) return 1;
+        var frameScale = stageScreen / layoutW;   // screen px per layout px
+        var s = (224 / 960 * stageScreen) / (cardW * frameScale);
+        return Math.max(0.6, Math.min(1, s));
+      }
+      function scaledCardSize() {
+        return [
+          lightModalCard.offsetWidth * lmScale,
+          lightModalCard.offsetHeight * lmScale
+        ];
+      }
       function clampCardPos(left, top) {
         var mw = lightModal.clientWidth, mh = lightModal.clientHeight;
-        var cw = lightModalCard.offsetWidth, ch = lightModalCard.offsetHeight;
+        var size = scaledCardSize();
+        var cw = size[0], ch = size[1];
         return [
           Math.max(0, Math.min(Math.max(0, mw - cw), left)),
           Math.max(0, Math.min(Math.max(0, mh - ch), top))
         ];
       }
       function positionModalCard(left, top) {
+        // Recompute the scale on every positioning pass, so a
+        // layout / fit change while the panel is open (the
+        // resize listener and fitFrame's clamp both re-enter
+        // here) rescales and re-clamps it in the new size.
+        lmScale = modalScale();
         var p = clampCardPos(left, top);
         lightModalCard.style.left = p[0] + "px";
         lightModalCard.style.top = p[1] + "px";
         lightModalCard.style.right = "auto";
-        lightModalCard.style.transform = "none";
+        lightModalCard.style.transform = lmScale === 1 ? "none" : "scale(" + lmScale + ")";
       }
       function openLightModal(i) {
         if (won) return;   // no modal during the win show
@@ -1707,18 +1775,21 @@
         lightModal.classList.add("open");
         lightModal.setAttribute("aria-hidden", "false");
         syncModalCtl();
-        // Initial dock, away from the fixture under control:
-        // left-third lights dock right, right-third lights dock
-        // left, center lights dock center-low below the truss.
-        // (In the Mobile scheme the truss rides higher, and the
-        // clamp keeps the panel inside the scene either way.)
-        var mw = lightModal.clientWidth, mh = lightModal.clientHeight;
-        var cw = lightModalCard.offsetWidth, ch = lightModalCard.offsetHeight;
-        var dock = lights[i].x < W / 3 ? "right"
-          : lights[i].x > 2 * W / 3 ? "left" : "center";
-        var left = dock === "right" ? mw - cw - 8 : dock === "left" ? 8 : (mw - cw) / 2;
-        var top = dock === "center" ? mh * 0.29 : 8;
-        positionModalCard(left, top);
+        // Initial dock by truss order (left to right):
+        // lights 1–4 start docked on the RIGHT side of the
+        // scene, lights 5–7 on the LEFT — in both cases away
+        // from the fixture under control. There is no
+        // center-low case. This is starting placement only:
+        // the panel stays draggable afterward, and the clamp
+        // inside positionModalCard works in the panel's
+        // scaled size, so it lands fully inside the scene in
+        // every layout state. Vertical anchoring is the same
+        // 8px top margin the side docks have always used.
+        lmScale = modalScale();
+        var mw = lightModal.clientWidth;
+        var cw = scaledCardSize()[0];
+        var left = i < 4 ? mw - cw - 8 : 8;
+        positionModalCard(left, 8);
         render();
       }
       function closeLightModal() {
@@ -1834,18 +1905,25 @@
         }
       });
 
+      // Fixture tap radius in stage units, derived from the
+      // live display scale (~44 screen px) with the legacy
+      // 48-unit radius as the floor — at a fluid width the
+      // stage units shrink on screen, and the tap target
+      // must not shrink with them. Shared by handleMobileTap
+      // (the hit test) and drawSceneControls (the bright
+      // selected-state ring drawn at exactly this radius), so
+      // the selected ring always shows the true hit area.
+      function mobileTapRadius() {
+        return Math.max(48, 44 / Math.max(0.2, displayScale()));
+      }
+
       // Scene tap in the mobile scheme: fixture taps win; else
       // the beam containing the tap selects its light — nearest
       // fixture when several beams overlap at the tap point.
       function handleMobileTap(ev) {
         var p = stagePos(ev);
         var i, d, best = -1, bestD = Infinity;
-        // Fixture tap radius in stage units, derived from the
-        // live display scale (~44 screen px) with the legacy
-        // 48-unit radius as the floor — at a fluid width the
-        // stage units shrink on screen, and the tap target
-        // must not shrink with them.
-        var tapR = Math.max(48, 44 / Math.max(0.2, displayScale()));
+        var tapR = mobileTapRadius();
         for (i = 0; i < lights.length; i++) {
           d = Math.hypot(p[0] - lights[i].x, p[1] - (APEX_Y - 8));
           if (d < tapR && d < bestD) { bestD = d; best = i; }
@@ -1994,6 +2072,11 @@
         // the re-laid-out frame, and a changed layout re-renders.
         var layoutChanged = applyLayout();
         fitFrame();
+        // Re-centre the goal pills against the fitted frame's
+        // final measurements (fitFrame can change the frame's
+        // layout width — hence the canvas's displayed height —
+        // after applyLayout's positioning pass ran).
+        syncLayoutPositions();
         if (layoutChanged && typeof render === "function") render();
       }
       window.addEventListener("resize", refreshRotation);

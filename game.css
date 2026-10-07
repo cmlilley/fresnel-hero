@@ -221,14 +221,25 @@
       }
       .goal-card {
         position: absolute;
-        /* Bottom edge sits 4.2% of the stage height above the
-           stage's bottom border; with the pill's own height the
-           whole card stays inside the floor band (the bottom 14%
-           of the scene) and below the performers' feet. */
-        bottom: 4.2%;
+        /* Vertically CENTRED in the floor band: the pill's
+           centre sits halfway between the floor line (FLOOR_Y,
+           where the performers stand) and the scene bottom (H).
+           JS owns the live value — positionGoalPill() derives
+           the centre in px from the current FLOOR_Y / H on
+           every layout pass, with clamping when the band is
+           shorter than the pill — so fluid widths, scheme
+           switches, and orientation flips all re-centre with
+           no stale offset, and the pill's fixed CSS height can
+           no longer push it up over the performers' feet as
+           the displayed stage height changes. This top value
+           is only the pre-JS fallback, computed from the same
+           constants for the Computer scheme: (516 + 600) / 2
+           / 600 = 93%. The translate centres the pill on that
+           point on both axes. */
+        top: 93%;
         width: 27.5%;
         max-width: 290px;
-        transform: translateX(-50%);
+        transform: translate(-50%, -50%);
         background: rgba(9, 9, 13, 0.78);
         border: 1px solid rgba(240, 237, 230, 0.28);
         border-radius: 999px;
@@ -447,10 +458,10 @@
            phones — never a stacked column — and stay fully inside
            the stage. At phone scale the canvas is short and its
            floor band is only ~30px tall, so the pill shrinks
-           (thinner bar, tighter padding) and hugs the bottom
-           border to fit inside that band. */
+           (thinner bar, tighter padding) to fit inside that
+           band; its vertical centre still comes from the
+           floor-band derivation (positionGoalPill in JS). */
         .goal-card {
-          bottom: 2.6%;
           /* A touch wider than desktop's share so the longest
              color name ("Magenta") still fits whole inside a
              third of the bar at phone width — the performer
@@ -545,18 +556,15 @@
          into the zoomed light modal below. The Computer scheme
          is the original in-scene control set, untouched. */
       body.scheme-mobile .scene-ui { display: none !important; }
-      /* Goal pills are positioned by a bottom PERCENTAGE of the
-         stage box, and the Mobile scene is drawn shorter (554
-         vs 600 units), so the same percentage would sit closer
-         to the floor in scene units. Restate the percentage so
-         the pill keeps the exact same scene-unit offset from
-         the stage bottom in both schemes: 4.2% of 600 = 25.2
-         units = 4.5487% of 554; on phones 2.6% of 600 = 15.6
-         units = 2.8159% of 554. */
-      body.scheme-mobile .goal-card { bottom: 4.5487%; }
-      @media (max-width: 760px) {
-        body.scheme-mobile .goal-card { bottom: 2.8159%; }
-      }
+      /* Goal pills are vertically centred in the floor band
+         by JS from the live FLOOR_Y / H (see positionGoalPill);
+         the Mobile scene is drawn shorter (554 vs 600 units,
+         floor at 470), so only the pre-JS fallback percentage
+         needs restating for the scheme: the Mobile band centre
+         is (470 + 554) / 2 / 554 = 92.4188% — the same fraction
+         at phone widths, since it derives from scene units,
+         not screen size. */
+      body.scheme-mobile .goal-card { top: 92.4188%; }
       .light-modal {
         position: absolute;
         inset: 0;
@@ -570,9 +578,16 @@
            which does NOT shrink — power + R/G/B at 32px with
            16px gaps plus the row's padding need 200px of
            content width, so the card is 224px and the fixture
-           canvas inside it is 200px wide (see LM_W). */
+           canvas inside it is 200px wide (see LM_W). In the
+           touch layouts JS scales the whole card down from
+           this 224px layout size (see modalScale) so its
+           on-screen footprint stays proportional to the
+           scene; the scale is a transform about the card's
+           top-left corner, so its layout position (left/top)
+           is always the painted top-left corner. */
         width: 224px;
         max-width: 94%;
+        transform-origin: 0 0;
         background: #141419;
         border: 1px solid rgba(240, 237, 230, 0.28);
         border-radius: 14px;
@@ -580,11 +595,11 @@
         box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
       }
       /* Docking is only the panel's INITIAL placement each time
-         it opens (positioned in JS): left-third lights dock
-         right, right-third lights dock left, center lights dock
-         center-low below the truss, so it never covers the
-         fixture it controls. From there the user can drag the
-         panel anywhere in the scene by its header strip. */
+         it opens (positioned in JS), by truss order: lights
+         1–4 dock on the right side of the scene, lights 5–7
+         on the left, so it starts away from the fixture it
+         controls. From there the user can drag the panel
+         anywhere in the scene by its header strip. */
       .light-modal-head {
         display: flex;
         align-items: center;
