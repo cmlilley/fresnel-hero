@@ -387,10 +387,6 @@
         padding: 5px 6px;
         backdrop-filter: blur(3px);
       }
-      .scene-light-ctl.selected {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 1px var(--accent), 0 4px 14px rgba(0, 0, 0, 0.45);
-      }
       .scene-light-ctl.off {
         border-color: rgba(240, 237, 230, 0.14);
         background: rgba(9, 9, 13, 0.62);
@@ -426,7 +422,7 @@
         color: rgba(240, 237, 230, 0.96);
         background: rgba(240, 237, 230, 0.05);
       }
-      .scene-power:hover { border-color: #ffb340; color: #ffd98a; }
+      .scene-power:hover { border-color: #fff; color: #fff; }
       .scene-power[aria-pressed="true"]:hover { color: #b6ffc4; }
       .scene-power:disabled { opacity: 1; cursor: default; }
       .scene-power:disabled[aria-pressed="false"] { opacity: 0.85; }
@@ -558,6 +554,7 @@
         .seg-fill { transition: none; }
         .btn.win-next { animation: none; }
       }
+
     </style>
   </head>
   <body>
