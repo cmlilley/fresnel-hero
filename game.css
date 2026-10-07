@@ -702,6 +702,7 @@
          the screen allows, and nothing ever spills past it. */
       @media (orientation: portrait) and (pointer: coarse) {
         html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+        body { background: #0b0b10; }
         .wrap {
           position: fixed;
           width: 100vh; width: 100dvh;
@@ -715,6 +716,25 @@
           display: flex;
           align-items: center;
           justify-content: center;
+          /* Background bleed: the stage set painted across the
+             whole wrap, so the margins around the fit-scaled
+             frame read as more set instead of plain page
+             background. Layered backgrounds on .wrap only —
+             they rotate with the wrap (so the gradient's
+             vertical is the stage's wall-to-floor axis),
+             never intercept pointer events, and vanish with
+             this state. Top layer: a soft proscenium vignette.
+             Under it: the set gradient sampled from the
+             canvas backdrop — wall #0b0b10 → #101017, then a
+             FEATHERED fall into the floor tones (#17130e by
+             ~80%, #241b10 at the bottom); unlike the canvas's
+             hard floor break, the bleed's transition is spread
+             so it can never draw a line that sits misaligned
+             beside the frame's real floor line. Static dressing:
+             it does not react to the lights or the win state. */
+          background:
+            radial-gradient(ellipse at center, rgba(2, 2, 5, 0) 55%, rgba(2, 2, 5, 0.6) 100%),
+            linear-gradient(to bottom, #0b0b10 0%, #101017 64%, #17130e 80%, #241b10 100%);
         }
         /* transform-origin centres the uniform shrink
            fitRotatedFrame applies so the full-width frame also
@@ -764,6 +784,7 @@
          or a fine-pointer context) the class is absent and the
          default layout is untouched. */
       html.fh-rotated, html.fh-rotated body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+      html.fh-rotated body { background: #0b0b10; }
       html.fh-rotated .wrap {
         position: fixed;
         width: 100vh; width: 100dvh;
@@ -777,6 +798,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        background:
+          radial-gradient(ellipse at center, rgba(2, 2, 5, 0) 55%, rgba(2, 2, 5, 0.6) 100%),
+          linear-gradient(to bottom, #0b0b10 0%, #101017 64%, #17130e 80%, #241b10 100%);
       }
       html.fh-rotated .stage-frame { width: 100%; flex: none; transform-origin: center center; }
       html.fh-rotated .scene-ui {
@@ -813,6 +837,7 @@
          windows are untouched. */
       @media (orientation: landscape) and (pointer: coarse) {
         html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+        body { background: #0b0b10; }
         .wrap {
           position: fixed;
           width: 100vw; width: 100dvw;
@@ -825,6 +850,9 @@
           display: flex;
           align-items: center;
           justify-content: center;
+          background:
+            radial-gradient(ellipse at center, rgba(2, 2, 5, 0) 55%, rgba(2, 2, 5, 0.6) 100%),
+            linear-gradient(to bottom, #0b0b10 0%, #101017 64%, #17130e 80%, #241b10 100%);
         }
         .stage-frame { width: 100%; flex: none; transform-origin: center center; }
       }
@@ -845,6 +873,7 @@
          in its normal landscape orientation can never trip
          it — desktop landscape stays exactly as it was. */
       html.fh-landfit, html.fh-landfit body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+      html.fh-landfit body { background: #0b0b10; }
       html.fh-landfit .wrap {
         position: fixed;
         width: 100vw; width: 100dvw;
@@ -857,6 +886,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        background:
+          radial-gradient(ellipse at center, rgba(2, 2, 5, 0) 55%, rgba(2, 2, 5, 0.6) 100%),
+          linear-gradient(to bottom, #0b0b10 0%, #101017 64%, #17130e 80%, #241b10 100%);
       }
       html.fh-landfit .stage-frame { width: 100%; flex: none; transform-origin: center center; }
 
