@@ -797,6 +797,113 @@
       modeMedium.addEventListener("click", function () { setMode("medium"); });
       modeHard.addEventListener("click", function () { setMode("hard"); });
 
+      /* ================= portrait rotation =================
+         On touch devices held in portrait the whole game rotates
+         90° clockwise as one unit (see the stylesheet's portrait
+         block). This signal mirrors the CSS trigger EXACTLY — the
+         same two media features, read from the layout viewport,
+         which the transform itself never changes — so the visuals
+         and the pointer maths can never disagree about whether
+         the game is rotated.
+         Rotation geometry (CSS rotate(90deg), y axis pointing
+         down): a stage-local vector (dx, dy) lands on screen as
+         (-dy, dx) — the stage's right edge points at the phone's
+         bottom edge. Inverting about the element's centre gives
+         local = (clientDy, -clientDx). And getBoundingClientRect
+         returns the rotated element's axis-aligned box, whose
+         WIDTH is the element's displayed HEIGHT and vice versa,
+         so every rect-based conversion below takes its scale
+         from the swapped dimension when rotated. DOM controls
+         need no help: they rotate with the wrap and the browser
+         hit-tests them natively.                        */
+      var ROTATE_MQ = window.matchMedia
+        ? window.matchMedia("(orientation: portrait) and (pointer: coarse)") : null;
+      function isRotated() { return !!(ROTATE_MQ && ROTATE_MQ.matches); }
+
+      var wrapEl = document.querySelector(".wrap");
+      var stageFrameEl = document.querySelector(".stage-frame");
+      // Size the frame inside the rotated box by UNIFORM SCALE
+      // ONLY: the frame keeps its full logical width — the box's
+      // long axis, so the top row and pill rows lay out exactly
+      // as they do on desktop and never re-wrap — its natural
+      // height is measured at that width, and the WHOLE frame
+      // (stage + selector rows + chrome) is shrunk by the
+      // tighter of the two fit ratios, min(availW / frameW,
+      // availH / frameH), so it fits BOTH swapped dimensions of
+      // the box with nothing clipped in either direction. The
+      // wrap's flex centring plus the frame's centre
+      // transform-origin keep the scaled frame centred in the
+      // box. (An earlier width-solve that narrowed the frame
+      // until its height fit is gone: as the frame narrows the
+      // chrome re-wraps TALLER, so the solve traded the stage
+      // away and converged to a degenerate ~160px width on a
+      // portrait phone — canvas ~142×89 — while the unscaled
+      // frame still stood ~612px tall against the ~370px
+      // cross-axis. Uniform scale makes the stage exactly as
+      // large as the box allows instead.) Every rect-based
+      // pointer conversion (stagePos / displayScale / lmPos)
+      // reads through the scale automatically; only the panel
+      // move-drag, which works in layout pixels, divides it
+      // back out.
+      function clampModalToScene() {
+        // Pull the light modal's panel back inside the (possibly
+        // newly sized) scene — the standalone resize listener
+        // runs before this fit, against the pre-fit bounds.
+        if (typeof modalIdx === "undefined") return;
+        if (modalIdx >= 0 && lightModal.classList.contains("open")) {
+          positionModalCard(lightModalCard.offsetLeft, lightModalCard.offsetTop);
+        }
+      }
+      // While rotated, the selector pills keep their wide,
+      // fixture-column layout (see the stylesheet's portrait
+      // block): the phone-width block's `left: auto !important`
+      // outranks their inline left, so re-assert each pill's
+      // column with important priority; when not rotated, hand
+      // the plain inline value back so the narrow unrotated
+      // layout's in-flow pill row applies again.
+      function setPillLeftPriority(important) {
+        if (typeof sceneCtls === "undefined" || typeof lights === "undefined") return;
+        for (var i = 0; i < sceneCtls.length; i++) {
+          var pct = (lights[i].x / W * 100) + "%";
+          if (important) sceneCtls[i].style.setProperty("left", pct, "important");
+          else sceneCtls[i].style.setProperty("left", pct);
+        }
+      }
+      function fitRotatedFrame() {
+        if (!wrapEl || !stageFrameEl) return;
+        if (!isRotated()) {
+          stageFrameEl.style.width = "";
+          stageFrameEl.style.transform = "";
+          setPillLeftPriority(false);
+          return;
+        }
+        setPillLeftPriority(true);
+        var cs = window.getComputedStyle(wrapEl);
+        var availW = wrapEl.clientWidth -
+          parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        var availH = wrapEl.clientHeight -
+          parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+        if (!(availW > 0) || !(availH > 0)) return;
+        // Measure the frame at its full logical width with no
+        // shrink applied, then scale the whole frame by the
+        // tighter of the two ratios so it fits the box on both
+        // axes at once — never narrower-for-height, never
+        // height-only — and leave it unscaled when it already
+        // fits. offsetWidth/offsetHeight ignore transforms, so
+        // the measurement is the frame's true layout size.
+        stageFrameEl.style.transform = "";
+        stageFrameEl.style.width = availW + "px";
+        var fw = stageFrameEl.offsetWidth;
+        var fh = stageFrameEl.offsetHeight;
+        if (fw > 0 && fh > 0) {
+          var s = Math.min(availW / fw, availH / fh);
+          if (s < 1) {
+            stageFrameEl.style.transform = "scale(" + s + ")";
+          }
+        }
+        clampModalToScene();
+      }
+
       /* ================= in-scene dragging =================
          One pointer system for the on-stage controls:
          - fixture body        -> tilt (aim), by relative pointer motion
@@ -812,6 +919,20 @@
 
       function stagePos(ev) {
         var r = stage.getBoundingClientRect();
+        if (isRotated()) {
+          // The rect is the rotated canvas's axis-aligned box:
+          // its height is the stage's displayed width. Invert
+          // the 90° clockwise turn about the box centre (local
+          // dx = client dy, local dy = -client dx) and take the
+          // scale from the swapped dimension — dragging toward
+          // the stage's right edge (the screen's bottom edge)
+          // moves the stage x exactly as an unrotated horizontal
+          // drag does, at the same per-screen-pixel gain.
+          var s = r.height > 0 ? r.height / W : 1;
+          var dx = ev.clientX - (r.left + r.width / 2);
+          var dy = ev.clientY - (r.top + r.height / 2);
+          return [W / 2 + dy / s, H / 2 - dx / s];
+        }
         return [
           (ev.clientX - r.left) * (W / r.width),
           (ev.clientY - r.top) * (H / r.height)
@@ -820,9 +941,12 @@
       // Live display scale: screen px per stage unit. All touch
       // geometry below is derived from it, so a control's on-screen
       // grab size stays put as the stage scales down to phone
-      // widths instead of shrinking with the canvas.
+      // widths instead of shrinking with the canvas. Rotated, the
+      // stage's width spans the rect's height, so that is the
+      // dimension to read.
       function displayScale() {
         var r = stage.getBoundingClientRect();
+        if (isRotated()) return r.height > 0 ? r.height / W : 1;
         return r.width > 0 ? r.width / W : 1;
       }
       // Below this display scale the legacy stage-unit grab radii
@@ -1159,6 +1283,7 @@
         try { localStorage.setItem("fresnel-hero-scheme", s); } catch (e) {}
         closeLightModal();
         applySchemeChrome();
+        fitRotatedFrame();   // the scene height changed with the scheme
         render();
       }
       schemeComputerBtn.addEventListener("click", function () { setScheme("computer"); });
@@ -1538,10 +1663,32 @@
       });
       lightModalCard.addEventListener("pointermove", function (ev) {
         if (!lmPanelDrag) return;
-        positionModalCard(
-          lmPanelDrag.startLeft + (ev.clientX - lmPanelDrag.startX),
-          lmPanelDrag.startTop + (ev.clientY - lmPanelDrag.startY)
-        );
+        var dx = ev.clientX - lmPanelDrag.startX;
+        var dy = ev.clientY - lmPanelDrag.startY;
+        if (isRotated()) {
+          // The panel's left/top live in the scene's unrotated
+          // local frame while the finger moves in the rotated
+          // screen frame: rotate the delta into the local frame
+          // (local dx = screen dy, local dy = -screen dx) so the
+          // panel tracks the finger exactly, and divide out the
+          // modal's on-screen scale — the rotated fit may have
+          // shrunk the frame (see fitRotatedFrame) — measured
+          // from the modal's own rect, whose height is its local
+          // width in screen px. The clamp inside
+          // positionModalCard works in local coords as before.
+          var mr = lightModal.getBoundingClientRect();
+          var k = mr.height > 0 && lightModal.clientWidth > 0
+            ? mr.height / lightModal.clientWidth : 1;
+          positionModalCard(
+            lmPanelDrag.startLeft + dy / k,
+            lmPanelDrag.startTop - dx / k
+          );
+        } else {
+          positionModalCard(
+            lmPanelDrag.startLeft + dx,
+            lmPanelDrag.startTop + dy
+          );
+        }
       });
       function lmEndPanelDrag() {
         if (!lmPanelDrag) return;
@@ -1587,9 +1734,18 @@
               flap and dragged relatively (no first-move snap),
               with the same +/-68 deg tilt clamp and the same
               door travel the scene's flap maths uses. ---- */
-      var lmDrag = null;   // { part, startClientX, startTilt, startDoor, startAng }
+      var lmDrag = null;   // { part, startClientX, startClientY, startTilt, startDoor, startAng }
       function lmPos(ev) {
         var r = lmCanvas.getBoundingClientRect();
+        if (isRotated()) {
+          // Same bounding-box trap as the main canvas: read the
+          // scale from the swapped dimension and invert the 90°
+          // turn about the box centre.
+          var s = r.height > 0 ? r.height / LM_W : 1;
+          var dx = ev.clientX - (r.left + r.width / 2);
+          var dy = ev.clientY - (r.top + r.height / 2);
+          return [LM_W / 2 + dy / s, LM_H / 2 - dx / s];
+        }
         return [
           (ev.clientX - r.left) * (LM_W / r.width),
           (ev.clientY - r.top) * (LM_H / r.height)
@@ -1621,7 +1777,7 @@
         var part = lmHit(p);
         if (!part) return;
         var L = lights[modalIdx];
-        lmDrag = { part: part, startClientX: ev.clientX, startTilt: L.tilt, startDoor: null, startAng: null };
+        lmDrag = { part: part, startClientX: ev.clientX, startClientY: ev.clientY, startTilt: L.tilt, startDoor: null, startAng: null };
         if (part === "flapL" || part === "flapR") {
           var side = part === "flapL" ? -1 : 1;
           lmDrag.startDoor = side < 0 ? L.doorL : L.doorR;
@@ -1639,8 +1795,16 @@
         if (lmDrag.part === "tilt") {
           // Relative drag, ~0.35 deg per screen px — a deliberate
           // sweep at modal scale, same +/-68 deg clamp as the scene.
+          // Rotated, the fixture's local horizontal axis runs down
+          // the screen, so the same per-screen-pixel gain reads the
+          // client Y travel instead: dragging toward the fixture's
+          // right (the screen's bottom edge) tilts it right,
+          // exactly as the main stage's aim drag behaves.
+          var travel = isRotated()
+            ? ev.clientY - lmDrag.startClientY
+            : ev.clientX - lmDrag.startClientX;
           L.tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT,
-            lmDrag.startTilt + (ev.clientX - lmDrag.startClientX) * 0.35));
+            lmDrag.startTilt + travel * 0.35));
         } else {
           var side2 = lmDrag.part === "flapL" ? -1 : 1;
           var ang = lmPointerAngle(side2, lmPos(ev));
@@ -1662,7 +1826,23 @@
       lmCanvas.addEventListener("pointerup", lmEndDrag);
       lmCanvas.addEventListener("pointercancel", lmEndDrag);
 
+      /* ================= portrait rotation: fit wiring =================
+         Recompute the rotated fit whenever the viewport or the
+         trigger itself changes; media queries read the layout
+         viewport, so these events — never the transform — drive
+         the state, and rotating back restores the untouched
+         desktop / landscape layout (fitRotatedFrame clears the
+         inline width when the trigger stops matching).       */
+      window.addEventListener("resize", fitRotatedFrame);
+      window.addEventListener("orientationchange", fitRotatedFrame);
+      if (ROTATE_MQ) {
+        if (ROTATE_MQ.addEventListener) ROTATE_MQ.addEventListener("change", fitRotatedFrame);
+        else if (ROTATE_MQ.addListener) ROTATE_MQ.addListener(fitRotatedFrame);
+      }
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitRotatedFrame);
+
       /* ================= go ================= */
       buildSceneCtls();
       newRound();
+      fitRotatedFrame();
     

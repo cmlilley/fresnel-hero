@@ -677,4 +677,75 @@
         .btn.win-next { animation: none; }
       }
 
+      /* ---------- portrait auto-rotate (touch devices) ----------
+         On a coarse-pointer device held in portrait, the whole
+         game — stage canvas, top row, selector pills, goal pills,
+         Help modal, light modal; everything lives inside .wrap —
+         turns 90° clockwise as ONE rigid unit, so the wide stage
+         fills the phone's long axis. No prompt, no extra copy: it
+         just does it. The trigger reads the layout viewport
+         (orientation + pointer media features), which CSS
+         transforms never change, so the rotation cannot feed back
+         into its own trigger. Landscape touch layouts and every
+         fine-pointer (desktop / mouse) layout are untouched.
+         The wrap becomes a fixed box with the viewport's
+         dimensions swapped, centred on the viewport, then rotated
+         about its own centre — so its painted (and hit-tested)
+         footprint is exactly the viewport and the page can never
+         scroll or overflow while rotated. JS mirrors this trigger
+         in isRotated() so the canvas pointer maths stays in the
+         same frame, and fitRotatedFrame() uniformly scales the
+         whole frame — never narrower, always its full logical
+         width — by the tighter of the two fit ratios against
+         the box's swapped dimensions, so the stage plus chrome
+         fit both axes at once: the stage ends up as large as
+         the screen allows, and nothing ever spills past it. */
+      @media (orientation: portrait) and (pointer: coarse) {
+        html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+        .wrap {
+          position: fixed;
+          width: 100vh; width: 100dvh;
+          height: 100vw; height: 100dvw;
+          left: calc(50% - 50vh); left: calc(50% - 50dvh);
+          top: calc(50% - 50vw); top: calc(50% - 50dvw);
+          max-width: none;
+          margin: 0;
+          padding: 10px;
+          transform: rotate(90deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        /* transform-origin centres the uniform shrink
+           fitRotatedFrame applies so the full-width frame also
+           fits the box's short axis. */
+        .stage-frame { width: 100%; flex: none; transform-origin: center center; }
+        /* The frame's logical width here is the phone's LONG
+           axis (844px on a 390×844 handset) — a wide layout —
+           but the phone-width block keys off the layout
+           viewport (390px) and so also matches, reflowing the
+           selector pills into an in-flow wrapped row above the
+           canvas. Inside the rotated frame that row is wrong
+           twice over: the pills leave their fixture columns,
+           and the row's height inflates the frame, shrinking
+           the uniform scale and the stage with it. Restore the
+           wide layout for the pill band: the overlay row back
+           over the stage, each pill absolute in its fixture's
+           column. (The phone block's `left: auto !important`
+           still outranks the pills' inline left, so
+           fitRotatedFrame re-asserts each pill's left with
+           important priority while rotated.) */
+        .scene-ui {
+          position: absolute;
+          inset: 10px 0 auto 0;
+          margin-bottom: 0;
+          display: block;
+          height: 0;
+        }
+        .scene-light-ctl {
+          position: absolute;
+          transform: translateX(-50%);
+        }
+      }
+
     
