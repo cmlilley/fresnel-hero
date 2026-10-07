@@ -110,7 +110,7 @@
          the width extends: slots and performers spread with it.
          Everything — drawing, beam polygons, barn-door
          occlusion, per-pixel scoring, pointer hit-testing and
-         drag gains, modal docking, and the round solver — reads
+         drag gains, the zoom pill, and the round solver — reads
          these same globals (W, SLOTS, chars[].x, BEAM_LEN,
          FLOOR_Y, APEX_Y, TRUSS_Y) live, so re-deriving the
          layout re-anchors the whole game at once. The fluid
@@ -286,6 +286,10 @@
             if (lights[i]) el.style.left = (lights[i].x / W * 100) + "%";
           });
         }
+        // The zoom pill rides the same layout pass, so it
+        // stays docked to its zoom window through fluid
+        // re-layouts, rotation flips, and scheme switches.
+        if (typeof positionZoomPill === "function") positionZoomPill();
       }
       // After ANY layout change the dealt round must remain
       // provably winnable under the new geometry. Debounced so
@@ -1086,21 +1090,19 @@
       /* ---- Mobile tap rings: a permanent affordance in the Mobile
               scheme only — the NON-SELECTED state of the dashed gold
               selection ring. Every fixture head — powered or not,
-              since every fixture is tappable — carries the same
-              dashed gold ring drawSceneControls paints on the
-              selected fixture (same hue rgb(255,217,138), same
-              [5,4] dash), but at a clearly dimmer alpha (0.35 vs
-              the selected 0.9) and a touch thinner (1.5 vs 2), so
-              one visual language reads at a glance: dim dashed =
-              tappable, bright dashed = selected. The dim ring is
-              drawn at the small fixture-hugging radius (27, the
-              radius the bright selection ring used originally);
-              selecting a fixture grows its ring to the fixture's
-              ACTUAL tap radius (mobileTapRadius, painted by
-              drawSceneControls), so selection reads as the ring
-              expanding, not shrinking. The selected fixture
-              (modalIdx) is skipped here: it shows only its bright
-              ring, painted by drawSceneControls. Purely visual: canvas strokes
+              since every fixture is tappable — carries the
+              dashed gold ring in its dim state (same hue
+              rgb(255,217,138), same [5,4] dash as the bright
+              selected-state styling), but at a clearly dimmer
+              alpha (0.35 vs the selected 0.9) and a touch
+              thinner (1.5 vs 2), so one visual language reads
+              at a glance: dim dashed = tappable, bright dashed
+              = selected. The dim ring is drawn at the small
+              fixture-hugging radius (27). The selected fixture
+              (zoomIdx) is skipped here: while it is zoomed it
+              wears NO ring at all — the zoom window's own
+              border, drawn by drawZoom in the bright dashed
+              gold, is its selection mark. Purely visual: canvas strokes
               never intercept input, and nothing here touches
               hit-testing or dragging. Drawn in scene coordinates
               from render(), just before the fixtures, so it follows
@@ -1116,7 +1118,7 @@
         ctx.strokeStyle = "rgba(255,217,138,0.35)";
         ctx.lineWidth = 1.5;
         lights.forEach(function (L, i) {
-          if (i === modalIdx) return;   // selected: bright ring only
+          if (i === zoomIdx) return;   // selected: the zoom rect's border is its mark
           ctx.beginPath();
           ctx.arc(L.x, APEX_Y - 8, r, 0, 6.2832);
           ctx.stroke();
@@ -1131,23 +1133,15 @@
         // Mobile scheme: the scene stays clean — no aim circles,
         // no barn-door knobs. The canvas affordances are the
         // dashed gold rings in two states: the dim non-selected
-        // ring on every fixture (drawTapRings, painted behind the
-        // fixtures) and this bright selected-state ring — drawn at
-        // the fixture's tap radius (mobileTapRadius), so it grows
-        // from the small dim ring — on the fixture the open modal
-        // is controlling, so the eye can tie the modal to its light.
+        // ring on every fixture (drawTapRings, painted behind
+        // the fixtures) and, for the selected fixture, no ring
+        // at all — the zoom window itself marks the selection,
+        // its border drawn in the bright dashed gold the
+        // selected-state ring used (see drawZoom).
         if (controlScheme === "mobile") {
-          if (modalIdx >= 0 && lights[modalIdx]) {
-            var mL = lights[modalIdx];
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(mL.x, APEX_Y - 8, mobileTapRadius(), 0, 6.2832);
-            ctx.strokeStyle = "rgba(255, 217, 138, 0.9)";
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 4]);
-            ctx.stroke();
-            ctx.restore();
-          }
+          // The selected fixture's mark is the zoom rect's
+          // dashed gold border, painted by drawZoom; the dim
+          // non-selected rings are drawTapRings' (above).
           return;
         }
         lights.forEach(function (L, i) {
@@ -1308,9 +1302,9 @@
         drawTapRings();
         lights.forEach(drawFixture);
         drawSceneControls();
-        // The zoomed modal fixture mirrors the live light 1:1 —
+        // The fixture zoom mirrors the live light 1:1 —
         // every scene render refreshes it too, so there is never
         // an apply step or a stale preview.
-        if (modalIdx >= 0) drawModalFixture();
+        if (zoomIdx >= 0) drawZoom();
       }
 

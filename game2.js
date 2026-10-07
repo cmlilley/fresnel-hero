@@ -170,7 +170,7 @@
       // state, so picking a dot on a dark light brings it up
       // (its power button flips to the on state); picking a
       // different dot on a lit light just changes its color.
-      // Shared by the scene pills and the light modal.
+      // Shared by the scene pills and the zoom pill.
       function selectColor(i, ch) {
         if (won) return;   // rig locked while the show runs
         var L = lights[i];
@@ -183,7 +183,7 @@
         syncSceneDots();
         syncPowerStates();
         syncSceneSelection();
-        if (modalIdx === i) syncModalCtl();
+        if (zoomIdx === i) syncZoomCtl();
         update();
       }
       // Toggle one fixture's power. Powering off kills its beam
@@ -350,7 +350,7 @@
         if (allMet) {
           won = true;
           wonAt = performance.now();
-          closeLightModal();   // the show locks the rig; the modal goes with it
+          closeZoom(true);   // the show locks the rig; the zoom goes with it
           setControlsLocked(true);
           newRoundBtn.classList.add("win-next");
           startShow();
@@ -746,7 +746,7 @@
           L.doorR = 0;
         });
         won = false;
-        closeLightModal();
+        closeZoom(true);
         stopShow();
         setControlsLocked(false);
         newRoundBtn.classList.remove("win-next");
@@ -781,7 +781,7 @@
         if (ev.target === mixModal) closeMix();
       });
       document.addEventListener("keydown", function (ev) {
-        if (ev.key === "Escape") { closeMix(); closeLightModal(); render(); }
+        if (ev.key === "Escape") { closeMix(); closeZoom(false); render(); }
       });
       var modeEasy = document.getElementById("modeEasy");
       var modeMedium = document.getElementById("modeMedium");
@@ -830,7 +830,7 @@
          on <html> applies stylesheet rules identical to the
          media-query block, so both paths paint the same game,
          and isRotated() below is true when EITHER path is
-         active — the pointer maths, the fit, the modal drag
+         active — the pointer maths, the fit, the zoom drag
          axes, and the pill re-assertion all key off that one
          unified state and can never disagree between paths. */
       function jsRotateMatches() {
@@ -897,19 +897,12 @@
       // frame still stood ~612px tall against the ~370px
       // cross-axis. Uniform scale makes the stage exactly as
       // large as the box allows instead.) Every rect-based
-      // pointer conversion (stagePos / displayScale / lmPos)
-      // reads through the scale automatically; only the panel
-      // move-drag, which works in layout pixels, divides it
-      // back out.
-      function clampModalToScene() {
-        // Pull the light modal's panel back inside the (possibly
-        // newly sized) scene — the standalone resize listener
-        // runs before this fit, against the pre-fit bounds.
-        if (typeof modalIdx === "undefined") return;
-        if (modalIdx >= 0 && lightModal.classList.contains("open")) {
-          positionModalCard(lightModalCard.offsetLeft, lightModalCard.offsetTop);
-        }
-      }
+      // pointer conversion (stagePos / displayScale)
+      // reads through the scale automatically.
+      // The zoom pill needs no clamping here: it is re-anchored
+      // to its fixture on every layout pass (positionZoomPill,
+      // via syncLayoutPositions), so a fit change re-places it
+      // with the rest of the layout.
       // While rotated, the selector pills keep their wide,
       // fixture-column layout (see the stylesheet's portrait
       // block): the phone-width block's `left: auto !important`
@@ -956,21 +949,18 @@
       // lock can survive into the plain layout — from either
       // the CSS path or the JS path.
       // Pointer maths under the landscape scale needs no new
-      // code: stagePos / displayScale / lmPos all derive from
+      // code: stagePos / displayScale all derive from
       // live getBoundingClientRect values, which already
       // include the uniform scale (in the un-rotated branch
       // the rect's width IS the scaled stage width), so gains
       // and hit radii track exactly as they do unscaled and in
-      // rotated mode. Only the modal panel drag, which works
-      // in layout pixels, divides the scale back out (see its
-      // landscape branch below).
+      // rotated mode.
       function fitFrame() {
         if (!wrapEl || !stageFrameEl) return;
         if (!isFitted()) {
           stageFrameEl.style.width = "";
           stageFrameEl.style.transform = "";
           setPillLeftPriority(false);
-          clampModalToScene();
           return;
         }
         // Pills keep their fixture columns only while rotated
@@ -1004,7 +994,6 @@
             stageFrameEl.style.transform = "scale(" + s + ")";
           }
         }
-        clampModalToScene();
       }
       // Historical name, kept as the single entry point the
       // scheme switch and the wiring below already call.
@@ -1018,6 +1007,8 @@
       var dragIdx = -1;
       var dragPart = null;      // "tilt" | "flapL" | "flapR"
       var dragStartX = null;    // pointer x (stage coords) at tilt-drag start
+      var dragStartClientX = null; // client px at zoom tilt-drag start (the zoom
+      var dragStartClientY = null; // tilt gain is per SCREEN px — see applyZoomDrag)
       var dragStartTilt = null; // fixture tilt at tilt-drag start
       var dragStartDoor = null; // door value at flap-drag start
       var dragStartAng = null;  // pointer angle around the hinge at flap-drag start
@@ -1261,7 +1252,7 @@
       }
       stage.addEventListener("pointerdown", function (ev) {
         if (won) return;   // rig locked while the show runs
-        if (controlScheme === "mobile") { handleMobileTap(ev); return; }
+        if (controlScheme === "mobile") { handleMobileDown(ev); return; }
         var startP = stagePos(ev);
         var hit = hitTest(startP);
         if (hit) {
@@ -1307,7 +1298,18 @@
       });
       stage.addEventListener("pointermove", function (ev) {
         if (won) return;   // no hover highlights while the show runs
-        if (controlScheme === "mobile") return;   // no canvas drags or hovers in the mobile scheme
+        if (controlScheme === "mobile") {
+          // Mobile scheme: no hover highlights. A live zoom
+          // drag is the only canvas motion; a pending tap dies
+          // once the press travels past the clean-tap
+          // threshold, so a swipe can never read as a tap.
+          if (dragIdx >= 0) { applyZoomDrag(ev); return; }
+          if (mobilePress &&
+              Math.hypot(ev.clientX - mobilePress.x, ev.clientY - mobilePress.y) > 8) {
+            mobilePress = null;
+          }
+          return;
+        }
         var p = stagePos(ev);
         if (dragIdx >= 0) { applyDrag(p); return; }
         var hit = hitTest(p);
@@ -1320,13 +1322,21 @@
         dragIdx = -1;
         dragPart = null;
         dragStartX = null;
+        dragStartClientX = null;
+        dragStartClientY = null;
         dragStartTilt = null;
         dragStartDoor = null;
         dragStartAng = null;
         stage.classList.remove("dragging");
       }
-      stage.addEventListener("pointerup", endDrag);
-      stage.addEventListener("pointercancel", endDrag);
+      stage.addEventListener("pointerup", function (ev) {
+        if (controlScheme === "mobile") { handleMobileUp(ev); return; }
+        endDrag();
+      });
+      stage.addEventListener("pointercancel", function () {
+        mobilePress = null;
+        endDrag();
+      });
       stage.addEventListener("pointerleave", function () {
         if (dragIdx < 0 && hoverHit) { hoverHit = null; render(); }
       });
@@ -1334,7 +1344,7 @@
       /* ================= control scheme =================
          Computer = the original in-scene controls (selector row,
          aim circles, barn-door knobs). Mobile = clean scene, tap
-         a fixture or its beam to open the zoomed control modal.
+         a fixture to zoom that fixture in place.
          Default follows the pointer type (coarse -> Mobile); the
          top-row toggle overrides it and the choice persists.   */
       var controlScheme = (function () {
@@ -1345,7 +1355,7 @@
         return (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
           ? "mobile" : "computer";
       })();
-      var modalIdx = -1;   // light the modal controls, -1 = closed
+      var zoomIdx = -1;   // light the fixture zoom controls, -1 = no zoom
       var schemeComputerBtn = document.getElementById("schemeComputer");
       var schemeMobileBtn = document.getElementById("schemeMobile");
       function applySchemeChrome() {
@@ -1387,7 +1397,7 @@
         // The solver's flattened samples are baked from FLOOR_Y;
         // rebuild them in the new coordinate space. All other
         // beam / hit-test / pointer maths reads the globals
-        // live, so tap mapping and modal docking follow the new
+        // live, so tap mapping and the zoom follow the new
         // height automatically.
         rebuildFlatSamples();
         // applyLayout positioned the goal pills BEFORE the
@@ -1402,7 +1412,7 @@
         if (s !== "mobile" && s !== "computer") return;
         controlScheme = s;
         try { localStorage.setItem("fresnel-hero-scheme", s); } catch (e) {}
-        closeLightModal();
+        closeZoom(true);
         applySchemeChrome();
         fitRotatedFrame();   // the scene height changed with the scheme
         // The fit may have re-sized the frame (hence the canvas)
@@ -1415,629 +1425,876 @@
       schemeMobileBtn.addEventListener("click", function () { setScheme("mobile"); });
       applySchemeChrome();
 
-      /* ================= mobile light modal =================
-         A zoomed fixture (1.25x — see LM_SCALE below) with its beam preview, drawn on
-         its own canvas from the SAME live light object the scene
-         uses — same tilt, doors, color, power, and the same
-         occlusion geometry (beamAngles / flapAngle). Every modal
-         drag writes straight into that light and calls update(),
-         so the real beam sweeps the stage, mixes re-score, and
-         the modal preview re-renders in the same frame. No apply
-         step, no snapshot.                                     */
-      var lightModal = document.getElementById("lightModal");
-      var lightModalCard = document.getElementById("lightModalCard");
-      var lightModalCtl = document.getElementById("lightModalCtl");
-      // NOTE: this variable must NOT be named `lightCanvas` —
-      // that name already belongs to the offscreen beam canvas
-      // created in the rendering section above (var lightCanvas
-      // = document.createElement("canvas"), sized W x H). The
-      // two `var`s share one script scope, so reusing the name
-      // here overwrote the offscreen reference, and worse,
-      // applySchemeChrome() — which resizes the OFFSCREEN canvas
-      // to W x H whenever the scheme changes — started resizing
-      // THIS modal canvas to 960 x 554/600 instead. The modal
-      // drawing only paints its 200 x 148 LM_W x LM_H corner of
-      // that oversized buffer, so on screen the fixture shrank
-      // into the top-left corner at ~1/5 size, the aim/flap hit
-      // maths (mapped to LM_W x LM_H) no longer lined up with
-      // anything visible, and the modal controls were unusable.
-      // Keeping the modal canvas in its own variable leaves the
-      // offscreen canvas (and the performer tinting that draws
-      // from it) untouched.
-      var lmCanvas = document.getElementById("lightCanvas");
-      var lmctx = lmCanvas.getContext("2d");
-      // The panel is shrunk to roughly a third of its former
-      // size (canvas 300x300 -> 200x148; the power / color
-      // buttons keep their 32px size — the panel's 224px width
-      // is floored by that button row, not by the fixture).
-      // Scale + pivot are fitted to the WORST CASE, not the
-      // resting pose, with the same containment rule as before:
-      // sampling the whole fixture assembly (can body, yoke,
-      // both flaps at every door amount, flap-tip knobs)
-      // through every tilt in +/-68 deg gives a bounding region
-      // 117 local units wide x 91 tall, centred at local
-      // (0, +12.9), with the farthest point 58.5 units from the
-      // pivot. At 1.25x that region plus an 11px knob radius
-      // spans ~168px of the 200px canvas width; vertically the
-      // pivot sits at y=60 so the truss bar drawn across the
-      // top (its top chord at local -45, i.e. canvas y ~3.8)
-      // clears the canvas top while the assembly's lowest
-      // reach (local +58.4 -> canvas y ~144 incl. knob) stays
-      // inside the 148px height — the fixture and its controls
-      // stay inside the panel at every aim and door position.
-      // The beam preview is exempt: it still runs to the edges.
-      var LM_W = 200, LM_H = 148, LM_SCALE = 1.25, LM_PIVOT = [100, 60];
-      var lmPower = document.getElementById("lmPower");
-      var lmDots = [
-        document.getElementById("lmDotR"),
-        document.getElementById("lmDotG"),
-        document.getElementById("lmDotB")
+      /* ================= mobile fixture zoom =================
+         In the Mobile scheme, tapping a fixture
+         no longer opens the retired docked light modal — that
+         element, its canvas, panel drag, and docking are GONE,
+         and there is no modal open path left in this scheme.
+         Instead the fixture ZOOMS IN PLACE: a rounded-rect
+         window, clamped fully inside the stage (see the zoom
+         geometry notes below), shows the fixture enlarged at
+         a VIRTUAL pivot anchored to the window itself
+         (see zoomPivot), drawn on the stage canvas
+         by drawZoom from the SAME live light object — same
+         tilt, doors, color, power, and the same occlusion
+         geometry (beamAngles / flapAngle) the modal preview
+         used. The desktop in-scene control glyphs (centre aim
+         circle, flap-tip knobs) are drawn at zoom scale inside
+         the window and dragged directly; every edit writes
+         straight into the light and calls update(), so the
+         real beam sweeps the stage and mixes re-score in the
+         same frame — no apply step, no snapshot. The real beam
+         is NOT enlarged: the scene underneath renders exactly
+         as always, and inside the window the zoomed fixture's
+         own beam is only a stub — the same angles, clipped to
+         the rect and faded toward its edges so it dissolves
+         at the border instead of ending in a hard cut.
+         The zoomed light's power/color controls live in the
+         .zoom-pill DOM pill (see positionZoomPill), docked
+         at the bottom centre of the zoom window. The Color
+         Guide modal is a different element and is untouched. */
+      var zoomPill = document.getElementById("zoomPill");
+      var zoomPillInner = document.getElementById("zoomPillInner");
+      var zmPower = document.getElementById("zmPower");
+      var zmDots = [
+        document.getElementById("zmDotR"),
+        document.getElementById("zmDotG"),
+        document.getElementById("zmDotB")
       ];
 
-      // Modal-canvas point <-> fixture-local coords, using the
-      // same rotation convention as the scene fixture (rotate by
-      // -tilt about the pivot), scaled by LM_SCALE.
-      function lmPoint(lx, ly) {
-        var L = lights[modalIdx];
+      /* ---- zoom geometry ----
+         The zoom window is a ROUNDED RECTANGLE, not the
+         circle it replaces: a pivot-centred circle of any
+         useful radius escapes this scene — the pivot sits
+         only 66 units below the canvas top in the Mobile
+         scheme, and the edge slots sit ~0.06 * W in from the
+         sides — so the circle spilled up over the header
+         chrome and off the stage edges. The rect instead is
+         SIZED like the circle it replaces — a modest
+         magnifier, 2 * clamp(W * 0.15, 126, 150) wide
+         (≈30% of the scene width) and slightly less tall,
+         never grown to fill the available space — and is
+         centred on the pivot by default, then shifted
+         (position only) until it lies fully inside the
+         stage: inset ZOOM_INSET from the left / right /
+         top canvas edges, its bottom edge held above the
+         floor goal pills (zoomBottomLimit). The window is
+         centred on the fixture's TRUE pivot by default and
+         its clamping keeps the true pivot — and with it the
+         real fixture and its ring area — inside the window
+         (see zoomPivot), so the opaque window always masks
+         the real fixture completely. The zoomed fixture
+         itself is NOT drawn at that true pivot: it hangs at
+         a VIRTUAL pivot anchored to the window (centred
+         horizontally, at the scene's hang height), so near
+         the edges the window shifts but the fixture stays
+         centred in it. The zoom SCALE derives from the rect
+         and the VIRTUAL pivot's room inside it — the same
+         room at every slot, so an edge fixture zooms as
+         large as a centre one. The control assembly (aim circle +
+         both flap-tip knobs) stays within 72 local units of
+         the pivot sideways and downward at any tilt
+         (+/-68 deg) and door position — tip centres reach
+         58.5 out, plus the knob radius — the containment
+         radius the circle version used (scale = radius / 72).
+         Upward the assembly reaches far less: a knob centre
+         can rise at most ~12.7 local units (full opposite
+         tilt, door open) and the drawn fixture's head (the
+         hanger top) reaches 30, so the upward extent is 36
+         with margin. zoomScale() is the largest scale that
+         keeps the assembly inside the rect on every side,
+         capped at the circle version's maximum (150 / 72).
+         The zoom pill docks at the
+         window's bottom (see positionZoomPill), in the dead
+         space below the assembly: the assembly hangs from
+         the pivot near the window's top and its downward
+         reach is containment-capped well short of the
+         pill's top edge at any tilt or door position, so
+         no scale cap is needed to protect it.
+         When an edge slot's room forces a smaller scale, the
+         scale gives — the containment never does.        */
+      var ZOOM_INSET = 8;              // rect inset from the canvas edges
+      var ZOOM_CORNER = 18;            // rect corner radius, scene units
+      var ZOOM_EXT = 72;               // assembly containment, sides + down
+      var ZOOM_EXT_UP = 36;            // assembly containment, upward
+      var ZOOM_SCALE_CAP = 150 / 72;   // the circle version's max scale
+      var ZOOM_PILL_INSET = 8;         // pill's bottom edge above the rect's bottom border, scene units
+
+      // The rect's bottom edge, in scene units: above the
+      // floor goal pills. Measured off the first pill's own
+      // layout box — the same offset maths positionGoalPill
+      // uses — so it tracks the pills in every layout, with
+      // a fall-back point inside the floor band when the
+      // pills are not measurable yet.
+      function zoomBottomLimit() {
+        var fallback = FLOOR_Y + (H - FLOOR_Y) * 0.18;
+        if (typeof stage === "undefined" || !stage ||
+            typeof goalsEl === "undefined" || !goalsEl ||
+            typeof goalCards === "undefined" || !goalCards.length ||
+            !goalCards[0] || !goalCards[0].card) return fallback;
+        var boxH = stage.offsetHeight;
+        var pill = goalCards[0].card;
+        if (!(boxH > 0) || !(pill.offsetHeight > 0)) return fallback;
+        var cvsTop = stage.offsetTop - goalsEl.offsetTop;
+        var topScene = (pill.offsetTop - cvsTop) / boxH * H;
+        if (!(topScene > 0)) return fallback;
+        return Math.min(H - ZOOM_INSET,
+          Math.max(FLOOR_Y + 8, topScene - 6));
+      }
+      // The zoom window's final rectangle (scene units).
+      // The SIZE is a modest magnifier, never derived from
+      // the available space: the old circle's diameter —
+      // 2 * clamp(W * 0.15, 126, 150) wide (≈30% of the
+      // scene width, 252–300 units) and slightly less tall,
+      // a squarish rounded rect. The POSITION centres on
+      // the zoomed fixture's pivot by default, then clamps
+      // (position only) so the window lies fully inside
+      // the scene: ZOOM_INSET from the left / right / top
+      // canvas edges, bottom edge at the goal-pill limit.
+      // Near an edge slot the window shifts and the fixture
+      // sits off-centre inside it — the window moves, the
+      // fixture stays at its true pivot.
+      function zoomRect() {
+        var L = lights[zoomIdx];
+        var cx = L ? L.x : W / 2, cy = APEX_Y - 8;
+        var w = 2 * Math.max(126, Math.min(150, W * 0.15));
+        var h = Math.round(w * 0.9);
+        var x = Math.max(ZOOM_INSET,
+          Math.min(cx - w / 2, W - ZOOM_INSET - w));
+        var y = Math.max(ZOOM_INSET,
+          Math.min(cy - h / 2, zoomBottomLimit() - h));
+        return { x: x, y: y, w: w, h: h };
+      }
+      // The zoomed fixture's VIRTUAL pivot — the anchor the
+      // zoomed fixture, its stub beam, and every zoom hit
+      // test and drag transform use. It is anchored to the
+      // WINDOW, not to the fixture's true scene pivot:
+      // horizontally CENTRED in the window, at the scene's
+      // own hang height (APEX_Y - 8, the depth the true
+      // pivot hangs at) — with the window's top clamped at
+      // ZOOM_INSET, the fixture's own truss segment (drawn
+      // in the fixture frame) sits near the window's top
+      // and the fixture hangs from it, the arrangement the
+      // retired modal's canvas used. Drawing at the true
+      // pivot instead made an edge slot's scale collapse:
+      // the clamped window left the pivot near its edge, the
+      // outward room vanished, and the containment maths
+      // shrank the whole fixture. Masking is unaffected:
+      // the window is opaque and zoomRect's clamping keeps
+      // the TRUE pivot inside it at every slot — slot 1's
+      // pivot (0.0625 * W) sits at least 27 ring units + the
+      // fixture body inside the window's left edge at every
+      // layout width, slot 7 symmetrically — so the real
+      // fixture and its ring area stay fully covered; only
+      // the DRAWN fixture moved. One accepted consequence:
+      // at edge slots the stub beam originates at the
+      // virtual pivot, not over the real beam's origin —
+      // its angles and occlusion are the real ones, and the
+      // edge fade handles the transition.
+      function zoomPivot() {
+        var r = zoomRect();
+        return { x: r.x + r.w / 2, y: APEX_Y - 8 };
+      }
+      // The zoom scale: the largest scale keeping the whole
+      // control assembly inside the window around the
+      // VIRTUAL pivot. Both side rooms are w / 2 by
+      // construction and the vertical rooms are the same at
+      // every slot, so the scale is uniform across slots —
+      // edge fixtures zoom exactly as large as centre ones.
+      function zoomScale() {
+        if (zoomIdx < 0 || !lights[zoomIdx]) return 1;
+        var r = zoomRect();
+        var pv = zoomPivot();
+        var zs = Math.min(
+          ZOOM_SCALE_CAP,
+          (pv.y - r.y) / ZOOM_EXT_UP,
+          (r.y + r.h - pv.y) / ZOOM_EXT,
+          (pv.x - r.x) / ZOOM_EXT,
+          (r.x + r.w - pv.x) / ZOOM_EXT
+        );
+        // The floor is only a divide-by-zero guard for the
+        // zoom transform: containment always wins over it.
+        return Math.max(0.05, zs);
+      }
+      // While drawZoom paints, the fixture is mid-animation
+      // and drawn at the animation's live scale (zoomScale x
+      // the eased progress), so the stub and fixture geometry
+      // it computes through zoomPt grows/shrinks in place.
+      // Outside the paint this is 0 and every transform uses
+      // the settled zoomScale() — hit tests and drags only
+      // ever see the settled transform.
+      var zoomDrawScale = 0;
+      function zoomScaleLive() {
+        return zoomDrawScale > 0 ? zoomDrawScale : zoomScale();
+      }
+      // Fixture-local point -> scene coords at zoom scale,
+      // about the VIRTUAL pivot (zoomPivot), using the same
+      // rotation convention as the scene fixture (rotate by
+      // -tilt about the pivot). The zoom version of the
+      // modal's lmPoint.
+      function zoomPt(lx, ly) {
+        var L = lights[zoomIdx];
+        var ZS = zoomScaleLive();
+        var pv = zoomPivot();
         var th = -L.tilt * Math.PI / 180;
         return [
-          LM_PIVOT[0] + LM_SCALE * (lx * Math.cos(th) - ly * Math.sin(th)),
-          LM_PIVOT[1] + LM_SCALE * (lx * Math.sin(th) + ly * Math.cos(th))
+          pv.x + ZS * (lx * Math.cos(th) - ly * Math.sin(th)),
+          pv.y + ZS * (lx * Math.sin(th) + ly * Math.cos(th))
         ];
       }
-      function lmLocal(p) {
-        var L = lights[modalIdx];
+      // Scene point -> fixture-local coords at zoom scale
+      // (inverse of zoomPt). The zoom version of lmLocal.
+      function zoomLocal(p) {
+        var L = lights[zoomIdx];
+        var ZS = zoomScaleLive();
+        var pv = zoomPivot();
         var th = -L.tilt * Math.PI / 180;
-        var dx = (p[0] - LM_PIVOT[0]) / LM_SCALE, dy = (p[1] - LM_PIVOT[1]) / LM_SCALE;
+        var dx = (p[0] - pv.x) / ZS, dy = (p[1] - pv.y) / ZS;
         return [dx * Math.cos(th) + dy * Math.sin(th), -dx * Math.sin(th) + dy * Math.cos(th)];
       }
-      function lmTipLocal(side) {
-        var L = lights[modalIdx];
+      // Barn-door flap tip in fixture-local coords — the
+      // modal's lmTipLocal, parameterised by light.
+      function tipLocalOf(L, side) {
         var ang = flapAngle(side, side < 0 ? L.doorL : L.doorR);
         return [side * 13 - Math.sin(ang) * FLAP_LEN, 16 + Math.cos(ang) * FLAP_LEN];
       }
-      function lmPointerAngle(side, p) {
-        var loc = lmLocal(p);
+      // The pointer's angle around a flap's hinge at zoom
+      // scale, in the same convention flapAngle uses — the
+      // modal's lmPointerAngle, through the zoom transform.
+      function zoomPointerAngle(side, p) {
+        var loc = zoomLocal(p);
         var vx = loc[0] - side * 13, vy = loc[1] - 16;
         if (vx * vx + vy * vy < 9) return null;
         return Math.atan2(-vx, vy);
       }
+      function zoomReducedMotion() {
+        return !!(window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      }
+      function zoomEase() {
+        var t = Math.max(0, Math.min(1, zoomT));
+        return 1 - Math.pow(1 - t, 3);   // ease-out cubic
+      }
 
-      function drawModalFixture() {
-        var L = lights[modalIdx];
-        if (!L || !lmctx) return;
-        // Self-heal: the modal canvas buffer is always exactly
-        // LM_W x LM_H. (Before the lmCanvas rename, a scheme
-        // switch could resize it to the stage's W x H — see the
-        // note at the lmCanvas declaration.)
-        if (lmCanvas.width !== LM_W || lmCanvas.height !== LM_H) {
-          lmCanvas.width = LM_W; lmCanvas.height = LM_H;
-        }
-        var c = lmctx;
+      // Rounded-rect path for the zoom window (clip + border).
+      function zoomRectPath(x, y, w, h, r) {
+        r = Math.max(0, Math.min(r, w / 2, h / 2));
+        ctx.beginPath();
+        if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); return; }
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+      }
+      // Offscreen for the beam stub: the stub is composited
+      // there so its edge fade can ERASE toward the rect's
+      // edges (destination-out) without punching through the
+      // scene the main canvas already holds underneath.
+      var zoomStubCvs = null, zoomStubCtx = null;
+
+      function drawZoom() {
+        var L = lights[zoomIdx];
+        if (!L) return;
+        var fin = zoomRect();
+        var pv = zoomPivot();
+        var e = zoomEase();
+        // The window grows from the VIRTUAL pivot out to
+        // its final clamped rect (and shrinks back the same
+        // way), and the fixture — painted at the live
+        // animation scale (zoomDrawScale) — scales up in
+        // place at that pivot inside it. Nothing is anchored
+        // to the true pivot any more: the window appears at
+        // its clamped position and the enlarged fixture
+        // grows within it.
+        var rx = pv.x + (fin.x - pv.x) * e, ry = pv.y + (fin.y - pv.y) * e;
+        var rw = fin.w * e, rh = fin.h * e;
+        if (rw < 6 || rh < 6) return;
+        var rr = Math.max(1, ZOOM_CORNER * e);
+        var ZS = zoomScale();
+        zoomDrawScale = ZS * e;
         var rgb = CH_RGB[L.color];
         var off = !isPowered(L);
         var lvl = lampLevel(L);
-        c.clearRect(0, 0, LM_W, LM_H);
-        var bg = c.createLinearGradient(0, 0, 0, LM_H);
+        ctx.save();
+        zoomRectPath(rx, ry, rw, rh, rr);
+        ctx.clip();
+        // ---- backdrop: the scene's own backdrop, in scene
+        //      coords, so the window's interior is the wall
+        //      and truss the fixture actually hangs in front
+        //      of — same gradient stops and wall panels as
+        //      render(), sampled at the same place. ----
+        var wallStop = (FLOOR_Y - 84) / H;
+        var bg = ctx.createLinearGradient(0, 0, 0, H);
         bg.addColorStop(0, "#0b0b10");
-        bg.addColorStop(1, "#17130e");
-        c.fillStyle = bg;
-        c.fillRect(0, 0, LM_W, LM_H);
-        // ---- beam preview: the live beam, same polygon shape
-        //      (hinge -> tip -> far shadow ray) as beamQuad,
-        //      clipped by the modal canvas edge ----
+        bg.addColorStop(wallStop, "#101017");
+        bg.addColorStop(wallStop + 0.0001, "#17130e");
+        bg.addColorStop(1, "#241b10");
+        ctx.fillStyle = bg;
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.fillStyle = "rgba(255,255,255,0.025)";
+        for (var i = 0; i < 6; i++) {
+          var wx = (28 + i * 156) * W / 960;
+          if (wx > rx - 2 && wx < rx + rw) ctx.fillRect(wx, FLOOR_Y - 376, 2, 346);
+        }
+        // ---- beam stub: the live beam's own polygon shape
+        //      (hinge -> tip -> far shadow ray, as beamQuad
+        //      drew it) at zoom scale — the same angles and
+        //      the same door occlusion as the real beam in
+        //      the scene beneath, which is untouched. The
+        //      stub is composited on an offscreen first: a
+        //      radial falloff from the lens, then an erase
+        //      toward each of the rect's edges, so it
+        //      DISSOLVES as it approaches the window's border
+        //      instead of ending in a hard cut where it
+        //      ends. ----
         if (lvl > 0.02) {
           var a = beamAngles(L);
-          var lens = lmPoint(0, 17);
-          var hingeL = lmPoint(-13, 16), hingeR = lmPoint(13, 16);
-          var tipL = lmPoint(lmTipLocal(-1)[0], lmTipLocal(-1)[1]);
-          var tipR = lmPoint(lmTipLocal(1)[0], lmTipLocal(1)[1]);
-          var farL = [tipL[0] + 460 * Math.sin(a.a1), tipL[1] + 460 * Math.cos(a.a1)];
-          var farR = [tipR[0] + 460 * Math.sin(a.a2), tipR[1] + 460 * Math.cos(a.a2)];
-          var farX = (farL[0] + farR[0]) / 2, farY = (farL[1] + farR[1]) / 2;
-          var g = c.createLinearGradient(lens[0], lens[1], farX, farY);
-          g.addColorStop(0, rgba(rgb, 0.5 * lvl));
-          g.addColorStop(0.55, rgba(rgb, 0.28 * lvl));
-          g.addColorStop(1, rgba(rgb, 0.03 * lvl));
-          c.save();
-          c.globalCompositeOperation = "lighter";
-          c.fillStyle = g;
-          c.beginPath();
-          c.moveTo(hingeL[0], hingeL[1]);
-          c.lineTo(tipL[0], tipL[1]);
-          c.lineTo(farL[0], farL[1]);
-          c.lineTo(farR[0], farR[1]);
-          c.lineTo(tipR[0], tipR[1]);
-          c.lineTo(hingeR[0], hingeR[1]);
-          c.closePath();
-          c.fill();
-          c.restore();
-        }
-        // ---- truss segment + hanger: a bar across the top of
-        //      the panel, styled like the scene's truss (two
-        //      chords + vertical ticks), so the fixture reads
-        //      as mounted rather than floating. It is placed in
-        //      the fixture's own local geometry — top chord at
-        //      local -45, lower chord at -29..-25, exactly where
-        //      the scene's truss sits relative to the hang
-        //      point — and a static hanger drops from the bar
-        //      to the yoke line, as in drawFixture. The bar
-        //      does not rotate; the fixture still pivots from
-        //      the same hang point under it. Painted over the
-        //      beam and under the fixture, like the scene. ----
-        (function () {
-          var px = LM_PIVOT[0], py = LM_PIVOT[1];
-          var topY = py - 45 * LM_SCALE;
-          c.fillStyle = "#1b1b21";
-          c.fillRect(0, topY, LM_W, 10 * LM_SCALE);
-          c.fillRect(0, py - 29 * LM_SCALE, LM_W, 4 * LM_SCALE);
-          c.fillStyle = "#2c2c34";
-          for (var tt = 4; tt < LM_W; tt += 26 * LM_SCALE) {
-            c.fillRect(tt, topY, Math.max(2, 3 * LM_SCALE), 20 * LM_SCALE);
+          var lens = zoomPt(0, 17);
+          var hingeL = zoomPt(-13, 16), hingeR = zoomPt(13, 16);
+          var tlL = tipLocalOf(L, -1), tlR = tipLocalOf(L, 1);
+          var tipL = zoomPt(tlL[0], tlL[1]);
+          var tipR = zoomPt(tlR[0], tlR[1]);
+          var reach = rw + rh;
+          var farL = [tipL[0] + reach * Math.sin(a.a1), tipL[1] + reach * Math.cos(a.a1)];
+          var farR = [tipR[0] + reach * Math.sin(a.a2), tipR[1] + reach * Math.cos(a.a2)];
+          var fadeR = 40 + Math.max(
+            Math.hypot(rx - lens[0], ry - lens[1]),
+            Math.hypot(rx + rw - lens[0], ry - lens[1]),
+            Math.hypot(rx - lens[0], ry + rh - lens[1]),
+            Math.hypot(rx + rw - lens[0], ry + rh - lens[1]));
+          if (!zoomStubCvs) {
+            zoomStubCvs = document.createElement("canvas");
+            zoomStubCtx = zoomStubCvs.getContext("2d");
           }
-          c.strokeStyle = off ? "#2b2b31" : "#3a3a42";
-          c.lineWidth = Math.max(2, 4 * LM_SCALE);
-          c.beginPath();
-          c.moveTo(px, py - 30 * LM_SCALE);
-          c.lineTo(px, py - 18 * LM_SCALE);
-          c.stroke();
-        })();
-        // ---- zoomed fixture, same drawing as drawFixture at
-        //      LM_SCALE, rotated about the pivot ----
-        c.save();
-        if (off) c.globalAlpha = 0.45;
-        c.translate(LM_PIVOT[0], LM_PIVOT[1]);
-        c.scale(LM_SCALE, LM_SCALE);
-        c.rotate(-L.tilt * Math.PI / 180);
-        c.fillStyle = "#26262c";
+          var sw = Math.max(2, Math.ceil(rw)), sh = Math.max(2, Math.ceil(rh));
+          if (zoomStubCvs.width !== sw || zoomStubCvs.height !== sh) {
+            zoomStubCvs.width = sw; zoomStubCvs.height = sh;
+          }
+          var sc = zoomStubCtx;
+          sc.setTransform(1, 0, 0, 1, 0, 0);
+          sc.clearRect(0, 0, sw, sh);
+          sc.save();
+          sc.translate(-rx, -ry);
+          var g = sc.createRadialGradient(lens[0], lens[1], 0, lens[0], lens[1], fadeR);
+          g.addColorStop(0, rgba(rgb, 0.5 * lvl));
+          g.addColorStop(0.5, rgba(rgb, 0.26 * lvl));
+          g.addColorStop(0.85, rgba(rgb, 0.05 * lvl));
+          g.addColorStop(1, rgba(rgb, 0));
+          sc.globalCompositeOperation = "lighter";
+          sc.fillStyle = g;
+          sc.beginPath();
+          sc.moveTo(hingeL[0], hingeL[1]);
+          sc.lineTo(tipL[0], tipL[1]);
+          sc.lineTo(farL[0], farL[1]);
+          sc.lineTo(farR[0], farR[1]);
+          sc.lineTo(tipR[0], tipR[1]);
+          sc.lineTo(hingeR[0], hingeR[1]);
+          sc.closePath();
+          sc.fill();
+          sc.globalCompositeOperation = "source-over";
+          // Erase toward the four edges: alpha ramps to zero
+          // exactly AT each border over the last stretch, so
+          // no stub edge can ever read as a cut.
+          var FD = Math.min(34, rw / 4, rh / 4);
+          var eg;
+          sc.globalCompositeOperation = "destination-out";
+          eg = sc.createLinearGradient(0, ry, 0, ry + FD);
+          eg.addColorStop(0, "rgba(0,0,0,1)"); eg.addColorStop(1, "rgba(0,0,0,0)");
+          sc.fillStyle = eg; sc.fillRect(rx, ry, rw, FD);
+          eg = sc.createLinearGradient(0, ry + rh, 0, ry + rh - FD);
+          eg.addColorStop(0, "rgba(0,0,0,1)"); eg.addColorStop(1, "rgba(0,0,0,0)");
+          sc.fillStyle = eg; sc.fillRect(rx, ry + rh - FD, rw, FD);
+          eg = sc.createLinearGradient(rx, 0, rx + FD, 0);
+          eg.addColorStop(0, "rgba(0,0,0,1)"); eg.addColorStop(1, "rgba(0,0,0,0)");
+          sc.fillStyle = eg; sc.fillRect(rx, ry, FD, rh);
+          eg = sc.createLinearGradient(rx + rw, 0, rx + rw - FD, 0);
+          eg.addColorStop(0, "rgba(0,0,0,1)"); eg.addColorStop(1, "rgba(0,0,0,0)");
+          sc.fillStyle = eg; sc.fillRect(rx + rw - FD, ry, FD, rh);
+          sc.globalCompositeOperation = "source-over";
+          sc.restore();
+          ctx.drawImage(zoomStubCvs, rx, ry, rw, rh);
+        }
+        // ---- truss segment + fixture + controls, in the
+        //      zoom frame: translate to the VIRTUAL pivot,
+        //      scale by the live animation scale, and draw in
+        //      fixture-local coords — the modal preview's
+        //      drawing, moved in-scene. ----
+        ctx.save();
+        ctx.translate(pv.x, pv.y);
+        ctx.scale(zoomDrawScale, zoomDrawScale);
+        // Truss bar across the window, in the fixture's own
+        // local geometry — top chord at local -45, lower chord
+        // at -29..-25, exactly where the scene's truss sits
+        // relative to the hang point — and a static hanger
+        // dropping to the yoke line, as the modal drew it.
+        // The bar does not rotate; the fixture pivots under it.
+        ctx.fillStyle = "#1b1b21";
+        ctx.fillRect(-80, -45, 160, 10);
+        ctx.fillRect(-80, -29, 160, 4);
+        ctx.fillStyle = "#2c2c34";
+        for (var tt = -78; tt < 80; tt += 26) ctx.fillRect(tt, -45, 3, 20);
+        ctx.strokeStyle = off ? "#2b2b31" : "#3a3a42";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, -30);
+        ctx.lineTo(0, -18);
+        ctx.stroke();
+        // Zoomed fixture: the modal preview's drawing at zoom
+        // scale, rotated about the pivot.
+        ctx.save();
+        if (off) ctx.globalAlpha = 0.45;
+        ctx.rotate(-L.tilt * Math.PI / 180);
+        ctx.fillStyle = "#26262c";
         [-1, 1].forEach(function (side) {
           var door = side < 0 ? L.doorL : L.doorR;
           var ang = flapAngle(side, door);
-          c.save();
-          c.translate(side * 13, 16);
-          c.rotate(ang);
-          c.fillRect(side < 0 ? -3 : 0, 0, 4.5, FLAP_LEN);
-          c.restore();
+          ctx.save();
+          ctx.translate(side * 13, 16);
+          ctx.rotate(ang);
+          ctx.fillRect(side < 0 ? -3 : 0, 0, 4.5, FLAP_LEN);
+          ctx.restore();
         });
-        c.fillStyle = "#222228";
-        c.strokeStyle = "#45454f";
-        c.lineWidth = 1.5;
-        c.beginPath();
-        if (c.roundRect) c.roundRect(-15, -22, 30, 40, 6); else c.rect(-15, -22, 30, 40);
-        c.fill(); c.stroke();
-        c.strokeStyle = "#45454f";
-        c.lineWidth = 3;
-        c.beginPath();
-        c.moveTo(-15, -14); c.lineTo(-20, -26);
-        c.moveTo(15, -14); c.lineTo(20, -26);
-        c.stroke();
-        c.fillStyle = "#17171d";
-        c.beginPath();
-        c.ellipse(0, 17, 12.5, 6.5, 0, 0, 6.2832);
-        c.fill();
+        ctx.fillStyle = "#222228";
+        ctx.strokeStyle = "#45454f";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-15, -22, 30, 40, 6); else ctx.rect(-15, -22, 30, 40);
+        ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = "#45454f";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-15, -14); ctx.lineTo(-20, -26);
+        ctx.moveTo(15, -14); ctx.lineTo(20, -26);
+        ctx.stroke();
+        ctx.fillStyle = "#17171d";
+        ctx.beginPath();
+        ctx.ellipse(0, 17, 12.5, 6.5, 0, 0, 6.2832);
+        ctx.fill();
         if (lvl > 0.02) {
-          var lg = c.createRadialGradient(0, 17, 1, 0, 17, 14);
+          var lg = ctx.createRadialGradient(0, 17, 1, 0, 17, 14);
           lg.addColorStop(0, "rgba(255,255,255," + (0.95 * lvl) + ")");
           lg.addColorStop(0.35, rgba(rgb, 0.95 * lvl));
           lg.addColorStop(1, rgba(rgb, 0.55 * lvl));
-          c.fillStyle = lg;
-          c.beginPath();
-          c.ellipse(0, 17, 12.5, 6.5, 0, 0, 6.2832);
-          c.fill();
+          ctx.fillStyle = lg;
+          ctx.beginPath();
+          ctx.ellipse(0, 17, 12.5, 6.5, 0, 0, 6.2832);
+          ctx.fill();
         }
-        c.restore();
-        // ---- affordances at modal scale: aim circle on the
-        //      pivot and a knob on each flap tip, drawn like the
-        //      scene's control circles, just bigger ----
+        // Affordances at zoom scale, drawn in the rotated
+        // frame so they ride the fixture exactly: a knob on
+        // each flap tip and the aim circle on the pivot, in
+        // the scene controls' own glyph language.
         [-1, 1].forEach(function (side) {
-          var tl = lmTipLocal(side);
-          var tp = lmPoint(tl[0], tl[1]);
-          var hot = lmDrag && lmDrag.part === (side < 0 ? "flapL" : "flapR");
-          c.save();
-          c.beginPath();
-          c.arc(tp[0], tp[1], hot ? 13.5 : 11.5, 0, 6.2832);
-          c.fillStyle = hot ? "#ffd98a" : "rgba(16,16,20,0.9)";
-          c.fill();
-          c.lineWidth = 2;
-          c.strokeStyle = hot ? "#ffd98a" : "rgba(240,237,230,0.85)";
-          c.stroke();
-          c.restore();
+          var tl = tipLocalOf(L, side);
+          var hot = dragIdx === zoomIdx && dragPart === (side < 0 ? "flapL" : "flapR");
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(tl[0], tl[1], hot ? 10 : 8, 0, 6.2832);
+          ctx.fillStyle = hot ? "#ffd98a" : "rgba(16,16,20,0.9)";
+          ctx.fill();
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = hot ? "#ffd98a" : "rgba(240,237,230,0.85)";
+          ctx.stroke();
+          ctx.restore();
         });
         (function () {
-          var hot = lmDrag && lmDrag.part === "tilt";
-          c.save();
-          c.beginPath();
-          c.arc(LM_PIVOT[0], LM_PIVOT[1], hot ? 17 : 15, 0, 6.2832);
-          c.fillStyle = hot ? "#ffd98a" : "rgba(16,16,20,0.92)";
-          c.fill();
-          c.lineWidth = 2;
-          c.strokeStyle = hot ? "#ffd98a" : "rgba(240,237,230,0.9)";
-          c.stroke();
-          c.beginPath();
-          c.arc(LM_PIVOT[0], LM_PIVOT[1], 3.5, 0, 6.2832);
-          c.fillStyle = hot ? "#1c1503" : "rgba(240,237,230,0.85)";
-          c.fill();
-          c.restore();
+          var hot = dragIdx === zoomIdx && dragPart === "tilt";
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(0, 0, hot ? 14 : 12, 0, 6.2832);
+          ctx.fillStyle = hot ? "#ffd98a" : "rgba(16,16,20,0.92)";
+          ctx.fill();
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = hot ? "#ffd98a" : "rgba(240,237,230,0.9)";
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, 6.2832);
+          ctx.fillStyle = hot ? "#1c1503" : "rgba(240,237,230,0.85)";
+          ctx.fill();
+          ctx.restore();
         })();
+        ctx.restore();
+        ctx.restore();
+        ctx.restore();
+        zoomDrawScale = 0;   // settled transforms resume (hit tests, drags)
+        // ---- border: the window's own outline IS the
+        //      selection mark — the bright dashed gold of the
+        //      selected-state ring (same gold rgb(255,217,138)
+        //      at 0.9, same [5,4] dash, same 2-unit weight),
+        //      drawn on the rect. No separate selection ring
+        //      is painted while a fixture is zoomed: the zoom
+        //      itself shows the selection. The dim rings on
+        //      the other fixtures are drawTapRings', as
+        //      before, and return to the two-state system
+        //      when the zoom collapses. ----
+        ctx.save();
+        zoomRectPath(rx, ry, rw, rh, rr);
+        ctx.strokeStyle = "rgba(255, 217, 138, 0.9)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.restore();
       }
 
-      function syncModalCtl() {
-        if (modalIdx < 0 || !lights[modalIdx]) return;
-        var L = lights[modalIdx];
+      function syncZoomCtl() {
+        if (zoomIdx < 0 || !lights[zoomIdx]) return;
+        var L = lights[zoomIdx];
         var on = isPowered(L);
-        lightModalCard.setAttribute("aria-label", "Light " + (modalIdx + 1) + " · " + L.pos + " controls");
-        lmPower.setAttribute("aria-pressed", on ? "true" : "false");
-        lmPower.setAttribute("aria-label", "Light " + (modalIdx + 1) + " power " + (on ? "on" : "off"));
-        lmDots.forEach(function (b) {
+        zoomPillInner.setAttribute("aria-label", "Light " + (zoomIdx + 1) + " · " + L.pos + " controls");
+        zmPower.setAttribute("aria-pressed", on ? "true" : "false");
+        zmPower.setAttribute("aria-label", "Light " + (zoomIdx + 1) + " power " + (on ? "on" : "off"));
+        zmDots.forEach(function (b) {
           b.setAttribute("aria-pressed",
             on && b.getAttribute("data-ch") === L.color ? "true" : "false");
         });
-        lightModalCtl.classList.toggle("off", !on);
+        zoomPillInner.classList.toggle("off", !on);
       }
-      lmPower.addEventListener("click", function () {
-        if (modalIdx < 0) return;
-        togglePower(modalIdx);
-        syncModalCtl();
+      zmPower.addEventListener("click", function () {
+        if (zoomIdx < 0) return;
+        togglePower(zoomIdx);
+        syncZoomCtl();
       });
-      lmDots.forEach(function (b) {
+      zmDots.forEach(function (b) {
         b.addEventListener("click", function () {
-          if (modalIdx < 0) return;
-          selectColor(modalIdx, b.getAttribute("data-ch"));
+          if (zoomIdx < 0) return;
+          selectColor(zoomIdx, b.getAttribute("data-ch"));
         });
       });
 
-      /* ---- panel positioning: the panel is placed in explicit
-              pixels inside the scene (the lightModal element,
-              which fills the stage box). Docking sets only the
-              INITIAL position on each open; the user can then
-              drag the panel anywhere (see the header-drag code
-              below), clamped so it always stays fully inside
-              the scene. Reopening — for any light — re-docks. */
-      /* ---- proportional panel size (touch layouts) ----
-         The panel's layout size stays 224px everywhere, but in
-         the touch layouts (a fitted state — rotated portrait or
-         landscape fit — or any coarse-pointer context) the card
-         is transform-scaled so its ON-SCREEN width holds the
-         approved fixed-design proportion: 224px against the
-         960-wide scene, ≈23% of the scene's on-screen width,
+      /* ---- the zoom pill's placement + proportional size ----
+         The pill's layout size stays 200x50 everywhere, but in
+         the touch layouts it is transform-scaled so its painted
+         height holds a fixed scene proportion (40 scene units)
+         — the spirit of the retired modal's footprint logic:
+         the pill's size follows the scene, not the raw pixels,
          in fluid, fit-fallback, and rotated states alike. The
-         scale derives from live rects: the stage canvas's
-         on-screen width (its rect's long dimension when
-         rotated) already includes the frame's fit scale, and
-         the panel shares that frame, so dividing the target
-         on-screen width by the panel's current on-screen width
-         (layout width × screen-px-per-layout-px) gives the
-         extra scale to apply. Scaling the whole card scales
-         the fixture canvas with it — the canvas's internal
-         drawing (LM_W × LM_H at LM_SCALE, fitted so the
-         fixture and its controls stay inside at every tilt
-         and door position) is untouched, so the fixture and
-         its beam preview stay contained exactly as at full
-         size, and every rect-based pointer conversion inside
-         the modal (lmPos, the panel drag) reads the scaled
-         rects live and stays correct. The scale is floored at
-         0.6 so the controls' 48px tap areas never drop below
-         ~29 layout-scaled px — no smaller than they
-         effectively were under the old fit build's uniform
-         shrink — and capped at 1: on desktop / fine-pointer
-         the scale is exactly 1 and the panel keeps today's
-         224px presentation. Docking and clamping below work
-         in the SCALED size (scaledCardSize), so the painted
-         panel is what stays inside the scene. */
-      var COARSE_MQ = window.matchMedia
-        ? window.matchMedia("(pointer: coarse)") : null;
-      var lmScale = 1;   // extra scale currently applied to the panel
-      function modalScale() {
-        if (!isFitted() && !(COARSE_MQ && COARSE_MQ.matches)) return 1;
-        var r = stage.getBoundingClientRect();
-        var stageScreen = isRotated() ? r.height : r.width;
-        var layoutW = stage.offsetWidth || lightModal.clientWidth;
-        var cardW = lightModalCard.offsetWidth;
-        if (!(stageScreen > 0) || !(layoutW > 0) || !(cardW > 0)) return 1;
-        var frameScale = stageScreen / layoutW;   // screen px per layout px
-        var s = (224 / 960 * stageScreen) / (cardW * frameScale);
-        return Math.max(0.6, Math.min(1, s));
+         scale derives from the stage canvas's own layout size
+         (layout px per scene unit), is floored at 0.55 so the
+         buttons' 48px tap areas never drop below ~26px, and is
+         capped at 1. Placement: docked at the BOTTOM CENTRE
+         of the zoom window (zoomRect) — horizontally centred
+         on the window, its bottom edge ZOOM_PILL_INSET scene
+         units above the window's bottom border, so it rides
+         inside the window wherever the window clamps: at an
+         edge slot the pill follows the shifted window, not
+         the fixture. Because the window itself is held fully
+         inside the stage with its bottom edge above the floor
+         goal pills, the pill — painted inside the window —
+         is inside the stage and clear of the goal pills too;
+         the stage-level clamps below are only a backstop.
+         It can never cover the aim circle or a flap knob: the
+         assembly hangs from the pivot near the window's top,
+         and its downward reach (containment-capped in
+         zoomScale, at most ~66.6 local units x the scale)
+         ends well above the pill's top edge at any tilt
+         (+/-68 deg) or door position — the window's bottom
+         band is dead space apart from the stub beam passing
+         behind the pill, which is fine: the pill is DOM
+         above the canvas. Re-run on every layout pass (via
+         syncLayoutPositions) and on open/jump, so rotation,
+         fluid re-layouts, and scheme switches re-anchor it
+         live; while the grow/shrink animation runs it sits
+         at the window's end-state anchor.                  */
+      function zoomPillScale() {
+        var lay = stage.offsetHeight > 0 ? stage.offsetHeight / H : 1;
+        return Math.max(0.55, Math.min(1, 40 * lay / 50));
       }
-      function scaledCardSize() {
-        return [
-          lightModalCard.offsetWidth * lmScale,
-          lightModalCard.offsetHeight * lmScale
-        ];
+      function positionZoomPill() {
+        if (typeof zoomPill === "undefined" || !zoomPill) return;
+        if (zoomIdx < 0 || !lights[zoomIdx]) return;
+        var boxW = stage.offsetWidth, boxH = stage.offsetHeight;
+        if (!(boxW > 0) || !(boxH > 0)) return;
+        var s = zoomPillScale();
+        var r = zoomRect();
+        var cxPx = stage.offsetLeft + ((r.x + r.w / 2) / W) * boxW;
+        var bottomPx = stage.offsetTop + ((r.y + r.h - ZOOM_PILL_INSET) / H) * boxH;
+        var minLeft = stage.offsetLeft + 2;
+        var maxLeft = stage.offsetLeft + boxW - 200 * s - 2;
+        var left = Math.max(minLeft, Math.min(Math.max(minLeft, maxLeft), cxPx - 100 * s));
+        zoomPill.style.left = left + "px";
+        // The painted pill (transform-origin 0 0, so its top
+        // is the container's top) sits just above the
+        // window's bottom border; the max() is only a
+        // backstop keeping its top inside the stage.
+        zoomPill.style.top = Math.max(bottomPx - 50 * s, stage.offsetTop + 2) + "px";
+        zoomPillInner.style.transform = s === 1 ? "none" : "scale(" + s + ")";
       }
-      function clampCardPos(left, top) {
-        var mw = lightModal.clientWidth, mh = lightModal.clientHeight;
-        var size = scaledCardSize();
-        var cw = size[0], ch = size[1];
-        return [
-          Math.max(0, Math.min(Math.max(0, mw - cw), left)),
-          Math.max(0, Math.min(Math.max(0, mh - ch), top))
-        ];
+
+      /* ---- open / jump / collapse, with the grow animation ----
+         zoomT is the animation's progress (0..1, eased in
+         drawZoom); opening grows the window from the virtual
+         pivot out to its full rect over ~200ms while the
+         fixture scales up in place inside it, collapsing
+         shrinks both back. A tap on another
+         fixture JUMPS: the zoom retargets instantly at full
+         size, no shrink/grow cycle. Under
+         prefers-reduced-motion both are instant. A win and a
+         scheme switch collapse instantly (closeZoom(true)) so
+         the zoom never lingers into the show or the other
+         scheme.                                            */
+      var zoomT = 0;
+      var zoomClosing = false;
+      var zoomAnimId = null;
+      var zoomLastTs = 0;
+      function zoomTick(ts) {
+        if (zoomIdx < 0) { zoomAnimId = null; return; }
+        if (!zoomLastTs) zoomLastTs = ts;
+        var dt = Math.min(64, ts - zoomLastTs);
+        zoomLastTs = ts;
+        var target = zoomClosing ? 0 : 1;
+        zoomT += (target > zoomT ? 1 : -1) * (dt / 200);
+        if ((target === 1 && zoomT >= 1) || (target === 0 && zoomT <= 0)) {
+          zoomT = target;
+          zoomAnimId = null;
+          zoomLastTs = 0;
+          if (zoomClosing) { zoomIdx = -1; zoomClosing = false; }
+          render();
+          return;
+        }
+        render();
+        zoomAnimId = requestAnimationFrame(zoomTick);
       }
-      function positionModalCard(left, top) {
-        // Recompute the scale on every positioning pass, so a
-        // layout / fit change while the panel is open (the
-        // resize listener and fitFrame's clamp both re-enter
-        // here) rescales and re-clamps it in the new size.
-        lmScale = modalScale();
-        var p = clampCardPos(left, top);
-        lightModalCard.style.left = p[0] + "px";
-        lightModalCard.style.top = p[1] + "px";
-        lightModalCard.style.right = "auto";
-        lightModalCard.style.transform = lmScale === 1 ? "none" : "scale(" + lmScale + ")";
+      function zoomKick() {
+        if (zoomAnimId === null && zoomIdx >= 0) {
+          zoomLastTs = 0;
+          zoomAnimId = requestAnimationFrame(zoomTick);
+        }
       }
-      function openLightModal(i) {
-        if (won) return;   // no modal during the win show
+      function openZoom(i) {
+        if (won) return;   // no zoom during the win show
         if (!lights[i]) return;
-        modalIdx = i;
+        if (zoomIdx === i && !zoomClosing) { positionZoomPill(); return; }
+        var jumping = zoomIdx >= 0 && zoomIdx !== i;
+        zoomIdx = i;
         selectedIdx = i;
         syncSceneSelection();
-        lightModalCard.className = "light-modal-card";
-        lightModal.classList.add("open");
-        lightModal.setAttribute("aria-hidden", "false");
-        syncModalCtl();
-        // Initial dock by truss order (left to right):
-        // lights 1–4 start docked on the RIGHT side of the
-        // scene, lights 5–7 on the LEFT — in both cases away
-        // from the fixture under control. There is no
-        // center-low case. This is starting placement only:
-        // the panel stays draggable afterward, and the clamp
-        // inside positionModalCard works in the panel's
-        // scaled size, so it lands fully inside the scene in
-        // every layout state. Vertical anchoring is the same
-        // 8px top margin the side docks have always used.
-        lmScale = modalScale();
-        var mw = lightModal.clientWidth;
-        var cw = scaledCardSize()[0];
-        var left = i < 4 ? mw - cw - 8 : 8;
-        positionModalCard(left, 8);
+        zoomClosing = false;
+        if (jumping || zoomReducedMotion()) zoomT = 1;
+        zoomPill.classList.add("open");
+        zoomPill.setAttribute("aria-hidden", "false");
+        syncZoomCtl();
+        positionZoomPill();
+        zoomKick();
         render();
       }
-      function closeLightModal() {
-        if (modalIdx < 0 && !lightModal.classList.contains("open")) return;
-        modalIdx = -1;
-        lmDrag = null;
-        lmPanelDrag = null;
-        lightModal.classList.remove("open");
-        lightModal.setAttribute("aria-hidden", "true");
-      }
-      document.getElementById("lightModalClose").addEventListener("click", function () {
-        closeLightModal();
-        render();
-      });
-      // Tap outside the panel closes it — but only a CLEAN tap:
-      // a press on the backdrop (the modal element itself) that
-      // releases within a few pixels of where it started. A
-      // press that travels — a drag of the panel, or a swipe
-      // across the backdrop — never counts as an outside tap.
-      var lmBackdropTap = null;
-      lightModal.addEventListener("pointerdown", function (ev) {
-        lmBackdropTap = ev.target === lightModal
-          ? { x: ev.clientX, y: ev.clientY } : null;
-      });
-      lightModal.addEventListener("pointerup", function (ev) {
-        if (!lmBackdropTap) return;
-        var moved = Math.hypot(ev.clientX - lmBackdropTap.x, ev.clientY - lmBackdropTap.y);
-        lmBackdropTap = null;
-        if (ev.target === lightModal && moved < 8) { closeLightModal(); render(); }
-      });
-      lightModal.addEventListener("pointercancel", function () { lmBackdropTap = null; });
-
-      /* ---- dragging the panel: grab the header strip (or the
-              card's own padding) and move the panel anywhere in
-              the scene. The fixture canvas, its aim circle and
-              flaps, the close button, and the power/color
-              buttons are NOT drag regions — they keep their own
-              jobs. Pointer capture keeps the drag smooth even
-              when the pointer outruns the panel, and the clamp
-              keeps the whole panel inside the scene. ---- */
-      var lightModalHead = lightModalCard.querySelector(".light-modal-head");
-      var lmPanelDrag = null;   // { startX, startY, startLeft, startTop }
-      lightModalCard.addEventListener("pointerdown", function (ev) {
-        if (modalIdx < 0) return;
-        var onHead = lightModalHead.contains(ev.target);
-        var onFrame = ev.target === lightModalCard;
-        if (!onHead && !onFrame) return;
-        if (ev.target.closest && ev.target.closest("button")) return;   // the close button
-        lmPanelDrag = {
-          startX: ev.clientX, startY: ev.clientY,
-          startLeft: lightModalCard.offsetLeft, startTop: lightModalCard.offsetTop
-        };
-        lightModalHead.classList.add("dragging");
-        lightModalCard.setPointerCapture(ev.pointerId);
-        ev.preventDefault();
-      });
-      lightModalCard.addEventListener("pointermove", function (ev) {
-        if (!lmPanelDrag) return;
-        var dx = ev.clientX - lmPanelDrag.startX;
-        var dy = ev.clientY - lmPanelDrag.startY;
-        if (isRotated()) {
-          // The panel's left/top live in the scene's unrotated
-          // local frame while the finger moves in the rotated
-          // screen frame: rotate the delta into the local frame
-          // (local dx = screen dy, local dy = -screen dx) so the
-          // panel tracks the finger exactly, and divide out the
-          // modal's on-screen scale — the rotated fit may have
-          // shrunk the frame (see fitRotatedFrame) — measured
-          // from the modal's own rect, whose height is its local
-          // width in screen px. The clamp inside
-          // positionModalCard works in local coords as before.
-          var mr = lightModal.getBoundingClientRect();
-          var k = mr.height > 0 && lightModal.clientWidth > 0
-            ? mr.height / lightModal.clientWidth : 1;
-          positionModalCard(
-            lmPanelDrag.startLeft + dy / k,
-            lmPanelDrag.startTop - dx / k
-          );
-        } else if (isLandFit()) {
-          // Un-rotated, but the landscape fit may have shrunk
-          // the frame: the panel's left/top live in layout
-          // pixels while the finger moves in screen pixels, so
-          // divide out the modal's on-screen scale — its rect
-          // width (which includes the frame's uniform scale)
-          // over its layout width — and the panel tracks the
-          // finger exactly, as in the rotated branch.
-          var mr2 = lightModal.getBoundingClientRect();
-          var k2 = mr2.width > 0 && lightModal.clientWidth > 0
-            ? mr2.width / lightModal.clientWidth : 1;
-          positionModalCard(
-            lmPanelDrag.startLeft + dx / k2,
-            lmPanelDrag.startTop + dy / k2
-          );
-        } else {
-          positionModalCard(
-            lmPanelDrag.startLeft + dx,
-            lmPanelDrag.startTop + dy
-          );
+      function closeZoom(instant) {
+        if (zoomIdx < 0) return;
+        zoomPill.classList.remove("open");
+        zoomPill.setAttribute("aria-hidden", "true");
+        if (dragIdx === zoomIdx) endDrag();
+        if (instant || zoomReducedMotion()) {
+          if (zoomAnimId !== null) { cancelAnimationFrame(zoomAnimId); zoomAnimId = null; }
+          zoomIdx = -1;
+          zoomT = 0;
+          zoomClosing = false;
+          zoomLastTs = 0;
+          render();
+          return;
         }
-      });
-      function lmEndPanelDrag() {
-        if (!lmPanelDrag) return;
-        lmPanelDrag = null;
-        lightModalHead.classList.remove("dragging");
+        zoomClosing = true;
+        zoomKick();
       }
-      lightModalCard.addEventListener("pointerup", lmEndPanelDrag);
-      lightModalCard.addEventListener("pointercancel", lmEndPanelDrag);
-      // If the scene shrinks (rotation / resize) with the panel
-      // open, pull it back fully inside the new bounds.
-      window.addEventListener("resize", function () {
-        if (modalIdx >= 0 && lightModal.classList.contains("open")) {
-          positionModalCard(lightModalCard.offsetLeft, lightModalCard.offsetTop);
-        }
-      });
 
       // Fixture tap radius in stage units, derived from the
       // live display scale (~44 screen px) with the legacy
       // 48-unit radius as the floor — at a fluid width the
       // stage units shrink on screen, and the tap target
-      // must not shrink with them. Shared by handleMobileTap
-      // (the hit test) and drawSceneControls (the bright
-      // selected-state ring drawn at exactly this radius), so
-      // the selected ring always shows the true hit area.
+      // must not shrink with them. Used by mobileTapTarget
+      // (the hit test): the true hit area around a fixture.
       function mobileTapRadius() {
         return Math.max(48, 44 / Math.max(0.2, displayScale()));
       }
 
-      // Scene tap in the mobile scheme: fixture taps win; else
-      // the beam containing the tap selects its light — nearest
-      // fixture when several beams overlap at the tap point.
-      function handleMobileTap(ev) {
-        var p = stagePos(ev);
+      // Which light a Mobile-scheme tap at scene point p
+      // means: ONLY a fixture tap counts — the nearest
+      // fixture within the tap radius (the radius the dim
+      // dashed rings mark). Beam taps deliberately select
+      // nothing: a beam never opens or jumps the zoom.
+      // -1 when the tap hits no fixture.
+      function mobileTapTarget(p) {
         var i, d, best = -1, bestD = Infinity;
         var tapR = mobileTapRadius();
         for (i = 0; i < lights.length; i++) {
           d = Math.hypot(p[0] - lights[i].x, p[1] - (APEX_Y - 8));
           if (d < tapR && d < bestD) { bestD = d; best = i; }
         }
-        if (best >= 0) { openLightModal(best); return; }
-        best = -1; bestD = Infinity;
-        for (i = 0; i < lights.length; i++) {
-          if (!isPowered(lights[i])) continue;   // dark fixtures throw no beam
-          if (pointInBeam(lights[i], p[0], p[1])) {
-            var lp = lensPos(lights[i]);
-            d = Math.hypot(p[0] - lp[0], p[1] - lp[1]);
-            if (d < bestD) { bestD = d; best = i; }
-          }
-        }
-        if (best >= 0) openLightModal(best);
+        return best;
       }
 
-      /* ---- modal dragging: same control language as the
-              scene, at modal scale. Aim is a relative drag from
-              the center circle; doors are grabbed by tip knob or
-              flap and dragged relatively (no first-move snap),
-              with the same +/-68 deg tilt clamp and the same
-              door travel the scene's flap maths uses. ---- */
-      var lmDrag = null;   // { part, startClientX, startClientY, startTilt, startDoor, startAng }
-      function lmPos(ev) {
-        var r = lmCanvas.getBoundingClientRect();
-        if (isRotated()) {
-          // Same bounding-box trap as the main canvas: read the
-          // scale from the swapped dimension and invert the 90°
-          // turn about the box centre.
-          var s = r.height > 0 ? r.height / LM_W : 1;
-          var dx = ev.clientX - (r.left + r.width / 2);
-          var dy = ev.clientY - (r.top + r.height / 2);
-          return [LM_W / 2 + dy / s, LM_H / 2 - dx / s];
+      /* ---- zoom control hit test: the desktop in-scene
+              control language at zoom scale. The aim circle
+              sits on the pivot; the doors are grabbed ONLY by
+              the flap-tip knobs or the flap strips themselves.
+              Radii derive from the live display scale so the
+              on-screen grab size holds at any stage size, and
+              are capped so a fattened aim zone can never reach
+              a flap tip (the tips sit >= ~96 scene units from
+              the pivot at zoom scale). ---- */
+      function zoomHit(p) {
+        if (zoomIdx < 0 || !lights[zoomIdx]) return null;
+        var L = lights[zoomIdx];
+        var ds = Math.max(0.2, displayScale());
+        // The aim radius is capped at 56 so its zone can never
+        // reach a flap tip's zone at full zoom scale, and it
+        // is ALSO capped against the live zoom scale: at an
+        // edge slot the zoom rect can force the scale down
+        // (see zoomScale), the tips swing in to 58.5 * scale
+        // scene units from the pivot, and the aim zone must
+        // shrink with them or it would swallow the flap knobs
+        // entirely. At full scale the cap never bites.
+        var aimHit = Math.min(Math.max(30, Math.min(56, 44 / ds)),
+          Math.max(16, 44 * zoomScale()));
+        var pv = zoomPivot();
+        if (Math.hypot(p[0] - pv.x, p[1] - pv.y) < aimHit) return "tilt";
+        var tipHit = Math.max(26, Math.min(48, 40 / ds));
+        var stripTol = Math.max(10, Math.min(30, 16 / ds));
+        var tlL = tipLocalOf(L, -1), tlR = tipLocalOf(L, 1);
+        var tipL = zoomPt(tlL[0], tlL[1]), tipR = zoomPt(tlR[0], tlR[1]);
+        var hinL = zoomPt(-13, 16), hinR = zoomPt(13, 16);
+        // Both doors fully closed: the two flap tips land on
+        // the same point, so split the shared grab zone by
+        // which side of the fixture's own centreline the touch
+        // falls on — the scene hit test's rule, at zoom scale.
+        if (Math.hypot(tipL[0] - tipR[0], tipL[1] - tipR[1]) < 12) {
+          if (Math.hypot(p[0] - tipL[0], p[1] - tipL[1]) < tipHit ||
+              distToSegment(p[0], p[1], hinL, tipL) < stripTol ||
+              distToSegment(p[0], p[1], hinR, tipR) < stripTol) {
+            return zoomLocal(p)[0] <= 0 ? "flapL" : "flapR";
+          }
+          return null;
         }
-        return [
-          (ev.clientX - r.left) * (LM_W / r.width),
-          (ev.clientY - r.top) * (LM_H / r.height)
-        ];
-      }
-      function lmHit(p) {
-        // Generous hit zones at modal scale: the visible aim
-        // circle is 15px and the flap knobs 11.5px, but fingers
-        // get 44 / 34px target radii and a 20px flap-strip
-        // tolerance. The flap tips sit ~72 canvas px from the
-        // pivot, so the 44px tilt zone can never swallow a tip;
-        // tips are also tested before the strip, and tilt is
-        // tested first only near the pivot where no flap
-        // segment except the hinge end passes.
-        if (Math.hypot(p[0] - LM_PIVOT[0], p[1] - LM_PIVOT[1]) < 44) return "tilt";
-        for (var k = 0; k < 2; k++) {
-          var side = k === 0 ? -1 : 1;
-          var tl = lmTipLocal(side);
-          var tp = lmPoint(tl[0], tl[1]);
-          var hp = lmPoint(side * 13, 16);
-          if (Math.hypot(p[0] - tp[0], p[1] - tp[1]) < 34) return side < 0 ? "flapL" : "flapR";
-          if (distToSegment(p[0], p[1], hp, tp) < 20) return side < 0 ? "flapL" : "flapR";
-        }
+        if (Math.hypot(p[0] - tipL[0], p[1] - tipL[1]) < tipHit ||
+            distToSegment(p[0], p[1], hinL, tipL) < stripTol) return "flapL";
+        if (Math.hypot(p[0] - tipR[0], p[1] - tipR[1]) < tipHit ||
+            distToSegment(p[0], p[1], hinR, tipR) < stripTol) return "flapR";
         return null;
       }
-      lmCanvas.addEventListener("pointerdown", function (ev) {
-        if (modalIdx < 0 || won) return;
-        var p = lmPos(ev);
-        var part = lmHit(p);
-        if (!part) return;
-        var L = lights[modalIdx];
-        lmDrag = { part: part, startClientX: ev.clientX, startClientY: ev.clientY, startTilt: L.tilt, startDoor: null, startAng: null };
-        if (part === "flapL" || part === "flapR") {
-          var side = part === "flapL" ? -1 : 1;
-          lmDrag.startDoor = side < 0 ? L.doorL : L.doorR;
-          var a0 = lmPointerAngle(side, p);
-          lmDrag.startAng = a0 === null ? flapAngle(side, lmDrag.startDoor) : a0;
-        }
-        lmCanvas.classList.add("dragging");
-        lmCanvas.setPointerCapture(ev.pointerId);
-        drawModalFixture();
-        ev.preventDefault();
-      });
-      lmCanvas.addEventListener("pointermove", function (ev) {
-        if (!lmDrag || modalIdx < 0) return;
-        var L = lights[modalIdx];
-        if (lmDrag.part === "tilt") {
-          // Relative drag, ~0.35 deg per screen px — a deliberate
-          // sweep at modal scale, same +/-68 deg clamp as the scene.
-          // Rotated, the fixture's local horizontal axis runs down
-          // the screen, so the same per-screen-pixel gain reads the
-          // client Y travel instead: dragging toward the fixture's
-          // right (the screen's bottom edge) tilts it right,
-          // exactly as the main stage's aim drag behaves.
+
+      /* ---- zoom dragging: same rules as the desktop scene
+              controls, driven through the zoom transform.
+              Aim is a RELATIVE drag (no first-move snap) at
+              0.45 deg per screen px — the desktop aim's own
+              per-screen-pixel feel; rotated, the fixture's
+              horizontal axis runs down the screen, so the
+              travel reads clientY, exactly as the desktop
+              stage's rotated aim does (the modal drag's
+              pattern). Doors are relative angular drags
+              around the hinge through zoomPointerAngle, with
+              the same door travel the scene/modals flap maths
+              uses. Every move calls update(): the real light,
+              its real beam, and the scoring all change live
+              under the zoom. ---- */
+      function applyZoomDrag(ev) {
+        var L = lights[dragIdx];
+        if (!L) return;
+        if (dragPart === "tilt") {
+          if (dragStartClientX === null) return;
           var travel = isRotated()
-            ? ev.clientY - lmDrag.startClientY
-            : ev.clientX - lmDrag.startClientX;
+            ? ev.clientY - dragStartClientY
+            : ev.clientX - dragStartClientX;
           L.tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT,
-            lmDrag.startTilt + travel * 0.35));
-        } else {
-          var side2 = lmDrag.part === "flapL" ? -1 : 1;
-          var ang = lmPointerAngle(side2, lmPos(ev));
-          if (ang === null || lmDrag.startAng === null) return;
+            dragStartTilt + travel * 0.45));
+        } else if (dragPart === "flapL" || dragPart === "flapR") {
+          var side = dragPart === "flapL" ? -1 : 1;
+          if (dragStartAng === null || dragStartDoor === null) return;
+          var ang = zoomPointerAngle(side, stagePos(ev));
+          if (ang === null) return;   // too close to the hinge to read an angle
           var closedAng = Math.asin(13 / FLAP_LEN);
-          var door = Math.round(lmDrag.startDoor +
-            (ang - lmDrag.startAng) / side2 / (closedAng + BASE_HALF) * 100);
+          var door = Math.round(dragStartDoor +
+            (ang - dragStartAng) / side / (closedAng + BASE_HALF) * 100);
           door = Math.max(0, Math.min(100, door));
-          if (side2 < 0) L.doorL = door; else L.doorR = door;
+          if (side < 0) L.doorL = door; else L.doorR = door;
         }
-        update();   // live-syncs the scene beam, scoring, and the preview
-      });
-      function lmEndDrag() {
-        if (!lmDrag) return;
-        lmDrag = null;
-        lmCanvas.classList.remove("dragging");
-        if (modalIdx >= 0) drawModalFixture();
+        update();
+        if (won) endDrag();   // update() collapsed the zoom as the show started
       }
-      lmCanvas.addEventListener("pointerup", lmEndDrag);
-      lmCanvas.addEventListener("pointercancel", lmEndDrag);
+
+      /* ---- Mobile-scheme stage presses ----
+         Zoom closed: a press on a fixture opens
+         that fixture's zoom immediately (as the modal opened).
+         Zoom open: a press on the aim circle or a flap knob
+         starts that control's drag (capture held, so the drag
+         tracks even off the fixture); any other press is held
+         as a pending tap and resolved on release — a CLEAN
+         tap (under 8 screen px of travel; the pointermove
+         handler kills the pending tap past that) on another
+         fixture outside the rect jumps the zoom to it,
+         and a clean tap anywhere else — the zoomed fixture's
+         non-control area included — collapses the zoom. A
+         press that travels is a swipe, never a tap, and a
+         drag never collapses. The zoom pill is a DOM sibling
+         of the canvas, so presses on it never reach these
+         handlers at all.                                  */
+      var mobilePress = null;   // { x, y } client px of a pending tap
+      function handleMobileDown(ev) {
+        if (zoomClosing) return;
+        var p = stagePos(ev);
+        if (zoomIdx >= 0) {
+          var hit = zoomHit(p);
+          if (hit) {
+            var L = lights[zoomIdx];
+            dragIdx = zoomIdx;
+            dragPart = hit;
+            dragStartX = p[0];
+            dragStartTilt = L.tilt;
+            dragStartClientX = ev.clientX;
+            dragStartClientY = ev.clientY;
+            if (hit === "flapL" || hit === "flapR") {
+              var fside = hit === "flapL" ? -1 : 1;
+              dragStartDoor = fside < 0 ? L.doorL : L.doorR;
+              var ang0 = zoomPointerAngle(fside, p);
+              // A strip grab too close to the hinge has no
+              // readable angle; take the flap's own current
+              // angle as the baseline instead — the pointer
+              // sits on the flap there, so the two agree and
+              // the first move still doesn't snap.
+              dragStartAng = ang0 === null ? flapAngle(fside, dragStartDoor) : ang0;
+            } else {
+              dragStartDoor = null;
+              dragStartAng = null;
+            }
+            selectedIdx = zoomIdx;
+            syncSceneSelection();
+            stage.classList.add("dragging");
+            stage.setPointerCapture(ev.pointerId);
+            mobilePress = null;
+            render();
+            return;
+          }
+          mobilePress = { x: ev.clientX, y: ev.clientY };
+          stage.setPointerCapture(ev.pointerId);
+          return;
+        }
+        var t = mobileTapTarget(p);
+        if (t >= 0) openZoom(t);
+      }
+      function handleMobileUp(ev) {
+        if (dragIdx >= 0) { endDrag(); return; }
+        if (!mobilePress) return;
+        var moved = Math.hypot(ev.clientX - mobilePress.x, ev.clientY - mobilePress.y);
+        mobilePress = null;
+        if (moved >= 8) return;   // travelled: a swipe, not a clean tap
+        if (won || zoomIdx < 0 || zoomClosing) return;
+        var p = stagePos(ev);
+        // Outside the zoom rect, a tap on another fixture
+        // jumps the zoom to that light. Anything else —
+        // beams included, inside the rect's non-control
+        // area, or empty stage outside it — collapses.
+        var zr = zoomRect();
+        var outside = p[0] < zr.x || p[0] > zr.x + zr.w ||
+          p[1] < zr.y || p[1] > zr.y + zr.h;
+        if (outside) {
+          var t = mobileTapTarget(p);
+          if (t >= 0 && t !== zoomIdx) { openZoom(t); return; }
+        }
+        closeZoom(false);
+      }
 
       /* ================= rotation + landscape fit: wiring =================
          Recompute the fitted state whenever the viewport or

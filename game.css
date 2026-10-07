@@ -550,11 +550,17 @@
       @media (pointer: coarse) and (max-width: 760px) {
         .scene-ui { row-gap: 14px; }
       }
-      /* ---------- control scheme + mobile light modal ----------
+      /* ---------- control scheme + mobile fixture zoom ----------
          The Mobile scheme hides the selector row entirely (the
          stage reclaims that space) and moves all manipulation
-         into the zoomed light modal below. The Computer scheme
-         is the original in-scene control set, untouched. */
+         into the in-place fixture zoom: tapping a fixture
+         magnifies it inside a rounded-rect window drawn on
+         the stage canvas itself (see drawZoom), and the
+         zoomed light's power/color controls live in the
+         single .zoom-pill below, docked at the bottom centre
+         of the zoom window.
+         The Computer scheme is the original in-scene control
+         set, untouched. */
       body.scheme-mobile .scene-ui { display: none !important; }
       /* Goal pills are vertically centred in the floor band
          by JS from the live FLOOR_Y / H (see positionGoalPill);
@@ -565,126 +571,78 @@
          at phone widths, since it derives from scene units,
          not screen size. */
       body.scheme-mobile .goal-card { top: 92.4188%; }
-      .light-modal {
+      /* The zoomed light's selector pill: exactly one, shown
+         only while a fixture is zoomed. JS owns its position
+         (positionZoomPill): docked at the bottom centre of
+         the zoom window — horizontally centred on the window
+         with its bottom edge just above the window's bottom
+         border — so it follows the window wherever the window
+         clamps, stays fully inside the stage, and never
+         overlaps the floor goal pills below the window. Like
+         the retired modal's card, it is transform-scaled from
+         its layout size about its top-left corner (so
+         left/top are the painted corner) to hold a
+         scene-proportional footprint in the touch layouts —
+         see zoomPillScale. It sits above the canvas (z 5)
+         but below the goal pills and the Color Guide modal,
+         and it never covers the zoomed fixture's aim circle
+         or flap knobs: the assembly hangs from the top of
+         the window and its containment-capped downward reach
+         ends well above the pill's top edge. */
+      .zoom-pill {
         position: absolute;
-        inset: 0;
-        z-index: 8;
+        z-index: 5;
         display: none;
-      }
-      .light-modal.open { display: block; }
-      .light-modal-card {
-        position: absolute;
-        /* Shrunk panel: the width is set by the control row,
-           which does NOT shrink — power + R/G/B at 32px with
-           16px gaps plus the row's padding need 200px of
-           content width, so the card is 224px and the fixture
-           canvas inside it is 200px wide (see LM_W). In the
-           touch layouts JS scales the whole card down from
-           this 224px layout size (see modalScale) so its
-           on-screen footprint stays proportional to the
-           scene; the scale is a transform about the card's
-           top-left corner, so its layout position (left/top)
-           is always the painted top-left corner. */
-        width: 224px;
-        max-width: 94%;
-        transform-origin: 0 0;
-        background: #141419;
-        border: 1px solid rgba(240, 237, 230, 0.28);
-        border-radius: 14px;
-        padding: 12px 12px 10px;
-        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
-      }
-      /* Docking is only the panel's INITIAL placement each time
-         it opens (positioned in JS), by truss order: lights
-         1–4 dock on the right side of the scene, lights 5–7
-         on the left, so it starts away from the fixture it
-         controls. From there the user can drag the panel
-         anywhere in the scene by its header strip. */
-      .light-modal-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        color: #f0ede6;
-        font: 700 13px "Barlow", sans-serif;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        margin-bottom: 6px;
-        /* The header strip is the panel's drag handle: grabbing
-           it (not the close button) moves the whole panel. */
-        cursor: grab;
-        touch-action: none;
-        user-select: none;
-        -webkit-user-select: none;
-      }
-      .light-modal-head.dragging { cursor: grabbing; }
-      /* Four-way move affordance in place of a text title:
-         sits in the drag strip (left, where the title was) and
-         reads as "this window moves" without naming the light
-         visibly — the light's name lives only in the dialog's
-         aria-label, updated in syncModalCtl. */
-      .light-modal-move {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        color: rgba(240, 237, 230, 0.55);
-        flex: none;
+        /* The outer box is the pill's UNSCALED layout box; only
+           the inner pill is painted (transform-scaled smaller),
+           so the outer must never intercept presses — the ring
+           of layout box below the painted pill would otherwise
+           swallow canvas taps meant for the fixture under it.
+           Only the painted inner pill takes pointer events. */
         pointer-events: none;
       }
-      .light-modal-move svg {
-        width: 20px;
-        height: 20px;
-        display: block;
-      }
-      canvas#lightCanvas {
-        display: block;
-        width: 100%;
-        height: auto;
-        border-radius: 8px;
-        background: #0b0b10;
-        touch-action: none;
-        cursor: grab;
-      }
-      canvas#lightCanvas.dragging { cursor: grabbing; }
-      .light-modal-ctl {
+      .zoom-pill-inner { pointer-events: auto; }
+      .zoom-pill.open { display: block; }
+      .zoom-pill-inner {
+        /* Layout size is set by the control row, which does NOT
+           shrink: power + R/G/B at 32px with 16px gaps plus the
+           row's padding need 200px of content width, 50px tall.
+           JS scales the whole pill down from this size in the
+           touch layouts (see zoomPillScale). */
+        width: 200px;
+        height: 50px;
+        box-sizing: border-box;
+        transform-origin: 0 0;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 16px;
-        margin-top: 10px;
         background: rgba(9, 9, 13, 0.78);
         border: 1px solid rgba(240, 237, 230, 0.22);
         border-radius: 999px;
         padding: 8px 12px;
+        backdrop-filter: blur(3px);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
       }
-      .light-modal-ctl.off .scene-dot {
+      .zoom-pill-inner.off .scene-dot {
         opacity: 0.38;
         filter: grayscale(0.55) saturate(0.45);
       }
-      /* Bigger controls inside the modal than in the selector
+      /* Bigger controls inside the pill than in the selector
          pills: 32px visible power / color buttons with 48px tap
          areas (::after extends 8px a side; with the 16px gap the
          neighbouring tap areas just meet, never overlap, so
          adjacent dots can't be mis-tapped). */
-      .light-modal-ctl .scene-power,
-      .light-modal-ctl .scene-dot {
+      .zoom-pill-inner .scene-power,
+      .zoom-pill-inner .scene-dot {
         width: 32px; height: 32px;
         position: relative;
         flex: none;
       }
-      .light-modal-ctl .scene-power { font-size: 17px; }
-      .light-modal-ctl .scene-power::after,
-      .light-modal-ctl .scene-dot::after {
+      .zoom-pill-inner .scene-power { font-size: 17px; }
+      .zoom-pill-inner .scene-power::after,
+      .zoom-pill-inner .scene-dot::after {
         content: ""; position: absolute; inset: -8px;
-      }
-      @media (pointer: coarse) {
-        .light-modal-ctl .scene-power,
-        .light-modal-ctl .scene-dot { width: 32px; height: 32px; }
-        .light-modal-ctl .scene-power { font-size: 17px; }
-        .light-modal-ctl .scene-power::after,
-        .light-modal-ctl .scene-dot::after { inset: -8px; }
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -695,7 +653,7 @@
       /* ---------- portrait auto-rotate (touch devices) ----------
          On a coarse-pointer device held in portrait, the whole
          game — stage canvas, top row, selector pills, goal pills,
-         Color Guide modal, light modal; everything lives inside .wrap —
+         Color Guide modal, zoom pill; everything lives inside .wrap —
          turns 90° clockwise as ONE rigid unit, so the wide stage
          fills the phone's long axis. No prompt, no extra copy: it
          just does it. The trigger reads the layout viewport
