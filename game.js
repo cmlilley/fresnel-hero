@@ -92,6 +92,208 @@
       var SLOTS = [60, 200, 340, 480, 620, 760, 900];
       var SLOT_POS = ["Far left", "Left", "Left center", "Center", "Right center", "Right", "Far right"];
 
+      /* ================= parameterized layout (fluid stage) =================
+         ONE layout derivation owns the scene's logical size and
+         every anchored quantity. On desktop / fine-pointer (and
+         in every non-fitted presentation) it reproduces today's
+         fixed numbers exactly: W = 960, slots at the 140-step
+         series 60..900, performer centres at 193 / 480 / 767,
+         BEAM_LEN 1250. In the touch fitted contexts (rotated
+         portrait box, landscape fit box) the layout goes FLUID:
+         the logical width takes the aspect of the available
+         stage box, so the stage genuinely fills the viewport
+         with playable space — no letterbox, no distortion, no
+         cropping. The logical HEIGHT stays the scheme's base
+         height (600 Computer / 554 Mobile), so every vertical
+         relationship (truss -> apex -> floor throw, performer
+         scale, sprite proportions) is exactly today's, and only
+         the width extends: slots and performers spread with it.
+         Everything — drawing, beam polygons, barn-door
+         occlusion, per-pixel scoring, pointer hit-testing and
+         drag gains, modal docking, and the round solver — reads
+         these same globals (W, SLOTS, chars[].x, BEAM_LEN,
+         FLOOR_Y, APEX_Y, TRUSS_Y) live, so re-deriving the
+         layout re-anchors the whole game at once. The fluid
+         aspect is clamped to a playable window (1.25:1 to
+         2.75:1); outside it the nearest clamped layout is used
+         and fitFrame's fit-within + the background bleed dress
+         the remainder, as before.                        */
+      var ASPECT_MIN = 1.25, ASPECT_MAX = 2.75;
+      var LAYOUT_FLUID = false;
+      var layoutAppliedW = 0;      // W at the last applyLayout (0 = never)
+      var roundDealt = false;      // true once newRound has dealt a round
+      var layoutVerifyTimer = null;
+      // Performer centres as fractions of W: today 193/960,
+      // 480/960, 767/960 — the fractions keep the trio spread
+      // proportionally at any fluid width, and at W = 960 they
+      // reproduce 118 / 405 / 692 (centre minus CHAR_W/2) exactly.
+      var CHAR_CENTER_FRAC = [193 / 960, 0.5, 767 / 960];
+      // The CSS-px box the stage canvas can occupy inside the
+      // fitted wrap: wrap content box minus the stage frame's
+      // own padding (10px a side), the in-scene head's height,
+      // and the stage box's top margin. Null when the fitted
+      // wrap is not measurable yet.
+      function fluidStageBox() {
+        if (typeof wrapEl === "undefined" || !wrapEl) return null;
+        var cs = window.getComputedStyle(wrapEl);
+        var availW = wrapEl.clientWidth -
+          parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        var availH = wrapEl.clientHeight -
+          parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+        if (!(availW > 0) || !(availH > 0)) return null;
+        var head = document.querySelector(".scene-head");
+        var headH = head ? head.offsetHeight : 40;
+        return { w: availW - 20, h: availH - 20 - headH - 10 };
+      }
+      function computeLayoutW() {
+        if (typeof isFitted !== "function" || !isFitted()) {
+          return { w: 960, fluid: false };
+        }
+        var box = fluidStageBox();
+        if (!box || !(box.w > 0) || !(box.h > 0)) return { w: 960, fluid: false };
+        var aspect = box.w / box.h;
+        var clamped = Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspect));
+        // Logical height stays the scheme base (H is already
+        // set for the scheme by applySchemeChrome / page load),
+        // so the width that carries the box's aspect is H*aspect.
+        return { w: Math.max(320, Math.round(H * clamped)), fluid: true };
+      }
+      // Re-derive the layout and re-anchor everything that is
+      // placed from it: slot series, fixture x positions,
+      // performer x positions, beam length, and the DOM
+      // positions (goal pills, selector pills) that are baked
+      // from stage percentages. Returns true when the logical
+      // width actually changed. Canvas resizing and the solver
+      // sample rebuild are the caller's job (applySchemeChrome
+      // owns them on scheme switches; refreshRotation re-enters
+      // applySchemeChrome's geometry path via fit + render and
+      // the canvas-size sync inside relayoutAfterFit below).
+      function applyLayout() {
+        var target = computeLayoutW();
+        var changed = target.w !== W || target.fluid !== LAYOUT_FLUID;
+        W = target.w;
+        LAYOUT_FLUID = target.fluid;
+        // Beam length must reach past the farthest corner of
+        // the CURRENT box at any tilt: the stage diagonal plus
+        // margin. Desktop keeps today's exact 1250.
+        BEAM_LEN = LAYOUT_FLUID
+          ? Math.max(1250, Math.ceil(Math.hypot(W, H) * 1.12))
+          : 1250;
+        // Seven hang points, one equal-interval series across
+        // the width: step 140 at W = 960, symmetric about W/2.
+        var step = W * 140 / 960;
+        for (var i = 0; i < SLOTS.length; i++) SLOTS[i] = W / 2 + (i - 3) * step;
+        if (typeof lights !== "undefined") {
+          lights.forEach(function (L) { L.x = SLOTS[L.slot]; });
+        }
+        if (typeof chars !== "undefined") {
+          chars.forEach(function (ch, ci) {
+            ch.x = CHAR_CENTER_FRAC[ci] * W - CHAR_W / 2;
+          });
+        }
+        syncLayoutPositions();
+        if (changed) {
+          var firstApply = layoutAppliedW === 0;
+          layoutAppliedW = W;
+          // The canvases and the solver's flattened samples are
+          // baked from the layout: resize + rebuild them in the
+          // new coordinate space (applySchemeChrome does the
+          // same on its own path; this covers re-layouts driven
+          // by rotation / resize, where no scheme switch runs).
+          if (typeof stage !== "undefined" && stage) {
+            if (stage.width !== W || stage.height !== H) { stage.width = W; stage.height = H; }
+            if (lightCanvas.width !== W || lightCanvas.height !== H) { lightCanvas.width = W; lightCanvas.height = H; }
+            if (tintCanvas.width !== W || tintCanvas.height !== H) { tintCanvas.width = W; tintCanvas.height = H; }
+            if (typeof rebuildFlatSamples === "function") rebuildFlatSamples();
+          }
+          // A re-layout mid-round keeps the round if it can:
+          // the solver re-verifies the CURRENT targets against
+          // the new geometry (debounced, in scheduleLayoutVerify)
+          // and only a round that is no longer winnable is
+          // re-dealt — targets only, rig state untouched.
+          if (!firstApply) scheduleLayoutVerify();
+        }
+        return changed;
+      }
+      // DOM positions baked from stage percentages (goal pills
+      // under their performers, selector pills over their
+      // fixtures) follow the layout.
+      function syncLayoutPositions() {
+        if (typeof goalCards !== "undefined" && typeof chars !== "undefined") {
+          goalCards.forEach(function (ui, i) {
+            if (chars[i]) ui.card.style.left = ((chars[i].x + CHAR_W / 2) / W * 100) + "%";
+          });
+        }
+        if (typeof sceneCtls !== "undefined" && typeof lights !== "undefined") {
+          sceneCtls.forEach(function (el, i) {
+            if (lights[i]) el.style.left = (lights[i].x / W * 100) + "%";
+          });
+        }
+      }
+      // After ANY layout change the dealt round must remain
+      // provably winnable under the new geometry. Debounced so
+      // a stream of resize events verifies once, when it
+      // settles. Light states (power / color / tilt / doors)
+      // are never touched here; a re-deal swaps targets only.
+      function scheduleLayoutVerify() {
+        if (!roundDealt || won) return;
+        if (layoutVerifyTimer) clearTimeout(layoutVerifyTimer);
+        layoutVerifyTimer = setTimeout(function () {
+          layoutVerifyTimer = null;
+          if (!roundDealt || won) return;
+          if (!currentTargetsWinnable()) redealTargetsOnly();
+        }, 300);
+      }
+      // Can any witness rig the solver can construct meet the
+      // current targets under the current layout? Search on the
+      // half-density samples (with the deal margin shaved), and
+      // confirm a candidate at full density — the percentages
+      // the game itself computes — before keeping the round.
+      function currentTargetsWinnable() {
+        var dealt = chars.map(function (ch) {
+          return ch.targets.map(function (t) { return { bits: t.bits, goal: t.goal }; });
+        });
+        for (var a = 0; a < 160; a++) {
+          var rig = randomWitnessRig();
+          var coarsePcts = rigPercents(rig, true);
+          var near = dealt.every(function (list, ci) {
+            return list.every(function (t) { return coarsePcts[ci][t.bits] >= t.goal - 1; });
+          });
+          if (near && verifyDeal(dealt, rigPercents(rig))) {
+            solutionRig = rig;
+            return true;
+          }
+        }
+        return false;
+      }
+      // Re-deal targets (same difficulty) against the current
+      // layout WITHOUT touching the rig: the player's power,
+      // color, tilt, and door states all persist, exactly as
+      // they do across a re-layout that keeps its round. The
+      // instant-win guard runs against the player's CURRENT
+      // rig (not a reset one): a deal the standing rig already
+      // meets is re-dealt, same as newRound's guard.
+      function redealTargetsOnly() {
+        var dealt = null;
+        for (var attempt = 0; attempt < 50; attempt++) {
+          dealt = solveRound();
+          var curRig = lights.map(function (L) {
+            return {
+              x: L.x, color: L.color, tilt: L.tilt,
+              doorL: L.doorL, doorR: L.doorR, power: isPowered(L)
+            };
+          });
+          if (!verifyDeal(dealt, rigPercents(curRig))) break;
+        }
+        chars.forEach(function (ch, i) {
+          ch.targets = dealt[i].map(function (t) {
+            return { bits: t.bits, goal: t.goal, now: 0 };
+          });
+        });
+        buildGoalRows();
+        update();
+      }
+
       /* ================= silhouette building =================
          Each build fn returns a Path2D of filled shapes in local
          coords (CHAR_W x CHAR_H box), reused for the black base,
@@ -912,7 +1114,7 @@
         // back wall panels: from 376 above the floor down to 30
         // above it (desktop y 140, height 346) in either scheme.
         ctx.fillStyle = "rgba(255,255,255,0.025)";
-        for (var i = 0; i < 6; i++) ctx.fillRect(28 + i * 156, FLOOR_Y - 376, 2, 346);
+        for (var i = 0; i < 6; i++) ctx.fillRect((28 + i * 156) * W / 960, FLOOR_Y - 376, 2, 346);
         // ---- stage-complete sign: painted on the back wall as part
         //      of the set, not a UI overlay. It lives in the backdrop,
         //      so the show's beams play over it while it runs. Fades
@@ -936,8 +1138,8 @@
           ctx.strokeStyle = "rgba(233, 199, 128, " + (0.22 * signFade) + ")";
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.moveTo(W / 2 - 218, FLOOR_Y - 220);
-          ctx.lineTo(W / 2 + 218, FLOOR_Y - 220);
+          ctx.moveTo(W / 2 - 218 * W / 960, FLOOR_Y - 220);
+          ctx.lineTo(W / 2 + 218 * W / 960, FLOOR_Y - 220);
           ctx.stroke();
           ctx.restore();
         }

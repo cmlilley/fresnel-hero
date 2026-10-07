@@ -737,6 +737,7 @@
             return { bits: t.bits, goal: t.goal, now: 0 };
           });
         });
+        roundDealt = true;
         buildGoalRows();
         lights.forEach(function (L, i) {
           L.color = slotColor(L.slot);
@@ -1366,6 +1367,14 @@
         APEX_Y = mobile ? APEX_Y_MOBILE : APEX_Y_DESKTOP;
         H = mobile ? H_MOBILE : H_DESKTOP;
         FLOOR_Y = mobile ? FLOOR_Y_MOBILE : FLOOR_Y_DESKTOP;
+        // Re-derive the layout width for the (possibly fitted)
+        // context and the new scheme height: desktop / unfitted
+        // reproduces W = 960 exactly; a fitted touch context
+        // derives the fluid width from the box at this scheme's
+        // height. Slots, fixture and performer positions, beam
+        // length, goal-pill and selector-pill positions all
+        // follow inside applyLayout.
+        applyLayout();
         // The stage canvas's internal height follows the scene
         // height, so its CSS aspect (width 100%, height auto)
         // shrinks with it; the offscreen light/tint canvases
@@ -1831,9 +1840,15 @@
       function handleMobileTap(ev) {
         var p = stagePos(ev);
         var i, d, best = -1, bestD = Infinity;
+        // Fixture tap radius in stage units, derived from the
+        // live display scale (~44 screen px) with the legacy
+        // 48-unit radius as the floor — at a fluid width the
+        // stage units shrink on screen, and the tap target
+        // must not shrink with them.
+        var tapR = Math.max(48, 44 / Math.max(0.2, displayScale()));
         for (i = 0; i < lights.length; i++) {
           d = Math.hypot(p[0] - lights[i].x, p[1] - (APEX_Y - 8));
-          if (d < 48 && d < bestD) { bestD = d; best = i; }
+          if (d < tapR && d < bestD) { bestD = d; best = i; }
         }
         if (best >= 0) { openLightModal(best); return; }
         best = -1; bestD = Infinity;
@@ -1967,7 +1982,20 @@
          priority) while the stylesheet locks keyed to the
          triggers fall away with them — no leftover scale or
          offset can persist past the turn.                  */
-      function refreshRotation() { syncRotateClass(); syncLandClass(); fitFrame(); }
+      function refreshRotation() {
+        syncRotateClass();
+        syncLandClass();
+        // Re-derive the layout for the new fitted state BEFORE
+        // fitting: an orientation flip or a resize into a new
+        // aspect re-anchors slots, performers, beams, scoring,
+        // and the solver to the new box (applyLayout also
+        // schedules the solver's winnability re-verification
+        // of the in-progress round), then fitFrame measures
+        // the re-laid-out frame, and a changed layout re-renders.
+        var layoutChanged = applyLayout();
+        fitFrame();
+        if (layoutChanged && typeof render === "function") render();
+      }
       window.addEventListener("resize", refreshRotation);
       window.addEventListener("orientationchange", refreshRotation);
       if (ROTATE_MQ) {
