@@ -748,4 +748,47 @@
         }
       }
 
+      /* JS-driven mirror of the portrait rotate block above.
+         Chrome on iOS is WebKit, where the (orientation:
+         portrait) and (pointer: coarse) media features can fail
+         to match on a touch handset held in portrait, so the
+         script also evaluates the same condition from portable
+         signals — touch capability (maxTouchPoints /
+         ontouchstart) and portrait by dimensions (innerHeight >
+         innerWidth) — and toggles .fh-rotated on <html> (see
+         syncRotateClass). These rules are declaration-for-
+         declaration identical to the media-query block: whichever
+         path fires, the painted result is the same rotated game,
+         and when both fire the equal-valued rules simply agree —
+         nothing double-applies. When neither matches (landscape,
+         or a fine-pointer context) the class is absent and the
+         default layout is untouched. */
+      html.fh-rotated, html.fh-rotated body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+      html.fh-rotated .wrap {
+        position: fixed;
+        width: 100vh; width: 100dvh;
+        height: 100vw; height: 100dvw;
+        left: calc(50% - 50vh); left: calc(50% - 50dvh);
+        top: calc(50% - 50vw); top: calc(50% - 50dvw);
+        max-width: none;
+        margin: 0;
+        padding: 10px;
+        transform: rotate(90deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      html.fh-rotated .stage-frame { width: 100%; flex: none; transform-origin: center center; }
+      html.fh-rotated .scene-ui {
+        position: absolute;
+        inset: 10px 0 auto 0;
+        margin-bottom: 0;
+        display: block;
+        height: 0;
+      }
+      html.fh-rotated .scene-light-ctl {
+        position: absolute;
+        transform: translateX(-50%);
+      }
+
     

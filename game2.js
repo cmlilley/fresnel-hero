@@ -818,7 +818,29 @@
          hit-tests them natively.                        */
       var ROTATE_MQ = window.matchMedia
         ? window.matchMedia("(orientation: portrait) and (pointer: coarse)") : null;
-      function isRotated() { return !!(ROTATE_MQ && ROTATE_MQ.matches); }
+      /* The same condition evaluated from portable signals, for
+         engines whose media features don't fire — Chrome on iOS
+         is WebKit, where (pointer: coarse) can fail to match on
+         a touch handset held in portrait. Touch capability from
+         maxTouchPoints / ontouchstart; portrait from the
+         window's own dimensions. When it matches, .fh-rotated
+         on <html> applies stylesheet rules identical to the
+         media-query block, so both paths paint the same game,
+         and isRotated() below is true when EITHER path is
+         active — the pointer maths, the fit, the modal drag
+         axes, and the pill re-assertion all key off that one
+         unified state and can never disagree between paths. */
+      function jsRotateMatches() {
+        var touch = (navigator.maxTouchPoints > 0) || ("ontouchstart" in window);
+        return touch && window.innerHeight > window.innerWidth;
+      }
+      function syncRotateClass() {
+        document.documentElement.classList.toggle("fh-rotated", jsRotateMatches());
+      }
+      function isRotated() {
+        return !!((ROTATE_MQ && ROTATE_MQ.matches) ||
+          document.documentElement.classList.contains("fh-rotated"));
+      }
 
       var wrapEl = document.querySelector(".wrap");
       var stageFrameEl = document.querySelector(".stage-frame");
@@ -1827,22 +1849,29 @@
       lmCanvas.addEventListener("pointercancel", lmEndDrag);
 
       /* ================= portrait rotation: fit wiring =================
-         Recompute the rotated fit whenever the viewport or the
-         trigger itself changes; media queries read the layout
-         viewport, so these events — never the transform — drive
-         the state, and rotating back restores the untouched
-         desktop / landscape layout (fitRotatedFrame clears the
-         inline width when the trigger stops matching).       */
-      window.addEventListener("resize", fitRotatedFrame);
-      window.addEventListener("orientationchange", fitRotatedFrame);
+         Recompute the rotated state whenever the viewport or
+         either trigger changes: refreshRotation re-evaluates
+         the JS trigger (syncRotateClass) and then refits, on
+         the same events for both paths — resize,
+         orientationchange, the media query's own change event,
+         and once at load below. Media queries read the layout
+         viewport and the JS path reads window dimensions, so
+         these events — never the transform — drive the state,
+         and rotating back restores the untouched desktop /
+         landscape layout (the class drops, the media query
+         stops matching, and fitRotatedFrame clears the inline
+         width when neither path is active).                  */
+      function refreshRotation() { syncRotateClass(); fitRotatedFrame(); }
+      window.addEventListener("resize", refreshRotation);
+      window.addEventListener("orientationchange", refreshRotation);
       if (ROTATE_MQ) {
-        if (ROTATE_MQ.addEventListener) ROTATE_MQ.addEventListener("change", fitRotatedFrame);
-        else if (ROTATE_MQ.addListener) ROTATE_MQ.addListener(fitRotatedFrame);
+        if (ROTATE_MQ.addEventListener) ROTATE_MQ.addEventListener("change", refreshRotation);
+        else if (ROTATE_MQ.addListener) ROTATE_MQ.addListener(refreshRotation);
       }
-      if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitRotatedFrame);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(refreshRotation);
 
       /* ================= go ================= */
       buildSceneCtls();
       newRound();
-      fitRotatedFrame();
+      refreshRotation();
     
